@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+web/dist/
+token-service/dist/
+dados/
