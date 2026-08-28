@@ -6,6 +6,7 @@ import { useTakeover } from '../hooks/useTakeover'
 import { obterApelido, salvarApelido } from '../lib/identidade'
 import { AguardandoResposta } from '../components/AguardandoResposta'
 import { ModalApelido } from '../components/ModalApelido'
+import { Medidor } from '../components/Medidor'
 import { Participantes } from '../components/Participantes'
 import { PedidoDeVez } from '../components/PedidoDeVez'
 import { Player } from '../components/Player'
@@ -126,6 +127,9 @@ export function SalaConectada({
         <SeletorPerfil aoCompartilhar={aoCompartilhar} />
       )}
       <Participantes nomes={participantes} />
+      <footer className="pt-2">
+        <Medidor />
+      </footer>
     </div>
   )
 }
