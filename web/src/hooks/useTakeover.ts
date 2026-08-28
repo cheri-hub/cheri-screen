@@ -11,6 +11,7 @@ export type OpcaoCompartilhar = {
 }
 
 const AVISO_FILA = 'Já tem alguém na fila, tenta em instantes.'
+const AVISO_FALHA = 'Não deu pra pedir a vez agora. Tenta de novo.'
 
 /**
  * Orquestra a disputa da vez sobre `useVez`: pede a vez, começa a publicar
@@ -37,15 +38,20 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
   const concluirPedido = useCallback(
     async (opcao: OpcaoCompartilhar) => {
       const decisao = await pedir(apelido)
+      if (decisao.resultado === 'aguardando') {
+        opcaoRef.current = opcao
+        return
+      }
+      // Qualquer outro desfecho encerra este pedido: não há pendência minha viva.
+      opcaoRef.current = null
       if (decisao.resultado === 'concedido') {
-        opcaoRef.current = null
         await publicar(opcao)
       } else if (decisao.resultado === 'ocupado') {
-        opcaoRef.current = null
         setAviso(AVISO_FILA)
-      } else if (decisao.resultado === 'aguardando') {
-        opcaoRef.current = opcao
+      } else if (decisao.resultado === 'ignorado') {
+        setAviso(AVISO_FALHA)
       }
+      // 'recusado' | 'liberado': o listener da metadata já cuida do aviso.
     },
     [pedir, apelido, publicar],
   )
