@@ -10,7 +10,7 @@ export type EstadoDaVez = {
 
 const VAZIO: EstadoDaVez = { sharer: null, pending: null }
 
-function ler(metadata: string | undefined): EstadoDaVez {
+export function lerEstadoDaVez(metadata: string | undefined): EstadoDaVez {
   if (!metadata) return VAZIO
   try {
     const bruto = JSON.parse(metadata) as Partial<EstadoDaVez>
@@ -41,7 +41,7 @@ export function useVez(room: Room | null, salaId: string) {
   const obterEstado = useCallback((): EstadoDaVez => {
     const metadata = room?.metadata
     if (cache.current.metadata !== metadata) {
-      cache.current = { metadata, estado: ler(metadata) }
+      cache.current = { metadata, estado: lerEstadoDaVez(metadata) }
     }
     return cache.current.estado
   }, [room])
@@ -61,10 +61,16 @@ export function useVez(room: Room | null, salaId: string) {
 
   const liberar = useCallback(() => liberarVez(salaId, eu), [salaId, eu])
 
+  // `estado` é referencialmente estável enquanto a metadata não muda, então
+  // `meuPedido` também é — pode entrar em dependências de efeito sem oscilar.
+  const meuPedido =
+    estado.pending && estado.pending.identity === eu ? estado.pending : null
+
   return {
     estado,
     souDono: estado.sharer?.identity === eu,
     pedemMinhaVez: estado.sharer?.identity === eu ? estado.pending : null,
+    meuPedido,
     pedir,
     responder,
     liberar,

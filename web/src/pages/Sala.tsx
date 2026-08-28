@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Room, RoomEvent } from 'livekit-client'
 import { useSala } from '../hooks/useSala'
-import { useVez } from '../hooks/useVez'
+import { useTakeover } from '../hooks/useTakeover'
 import { obterApelido, salvarApelido } from '../lib/identidade'
-import { escolherCodec, opcoesDeCaptura, type Perfil } from '../lib/perfis'
+import { AguardandoResposta } from '../components/AguardandoResposta'
 import { ModalApelido } from '../components/ModalApelido'
 import { Participantes } from '../components/Participantes'
+import { PedidoDeVez } from '../components/PedidoDeVez'
 import { Player } from '../components/Player'
 import { SeletorPerfil } from '../components/SeletorPerfil'
 import { SalaExpirada } from './SalaExpirada'
@@ -56,13 +57,23 @@ type SalaConectadaProps = {
   participantes: string[]
 }
 
-function SalaConectada({
+export function SalaConectada({
   room,
   salaId,
   apelido,
   participantes,
 }: SalaConectadaProps) {
-  const { souDono, pedir, liberar } = useVez(room, salaId)
+  const {
+    estado,
+    souDono,
+    pedemMinhaVez,
+    meuPedido,
+    responder,
+    liberar,
+    aviso,
+    aoCompartilhar,
+    aoExpirar,
+  } = useTakeover(room, salaId, apelido)
 
   useEffect(() => {
     const aoDespublicar = () => void liberar()
@@ -72,26 +83,18 @@ function SalaConectada({
     }
   }, [room, liberar])
 
-  async function aoCompartilhar(
-    perfil: Perfil,
-    alta: boolean,
-    preferirAv1: boolean,
-  ) {
-    const decisao = await pedir(apelido)
-    if (decisao.resultado !== 'concedido') return decisao
-
-    const codec = escolherCodec(preferirAv1)
-    const { captura, publicacao } = opcoesDeCaptura(perfil, alta, codec)
-    await room.localParticipant.setScreenShareEnabled(true, captura, publicacao)
-    return decisao
-  }
-
   async function pararDeCompartilhar() {
     await room.localParticipant.setScreenShareEnabled(false)
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      {pedemMinhaVez && (
+        <PedidoDeVez
+          nome={pedemMinhaVez.nome}
+          aoResponder={(aceita) => void responder(aceita)}
+        />
+      )}
       <button
         onClick={() => navigator.clipboard.writeText(window.location.href)}
         className="rounded-lg bg-neutral-800 px-3 py-2 text-sm"
@@ -99,6 +102,19 @@ function SalaConectada({
         Copiar link da sala
       </button>
       <Player room={room} />
+      {meuPedido && estado.sharer && (
+        <AguardandoResposta
+          dono={estado.sharer.nome}
+          expiraEm={meuPedido.expiraEm}
+          aoExpirar={aoExpirar}
+        />
+      )}
+      {estado.pending && !meuPedido && !souDono && (
+        <p className="text-sm text-neutral-400">
+          {estado.pending.nome} pediu a vez de compartilhar.
+        </p>
+      )}
+      {aviso && <p className="text-sm text-amber-300">{aviso}</p>}
       {souDono ? (
         <button
           onClick={pararDeCompartilhar}
