@@ -13,3 +13,16 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  token-service:
+    build: ./token-service
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - dados:/dados
+    depends_on:
+      - livekit
+
+volumes:
+  dados:
