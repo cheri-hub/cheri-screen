@@ -3,6 +3,7 @@ import { RoomEvent, type Room } from 'livekit-client'
 import { lerEstadoDaVez, useVez } from './useVez'
 import { obterIdentidade } from '../lib/identidade'
 import { escolherCodec, opcoesDeCaptura, type Perfil } from '../lib/perfis'
+import type { Decisao } from '../lib/api'
 
 export type OpcaoCompartilhar = {
   perfil: Perfil
@@ -12,6 +13,7 @@ export type OpcaoCompartilhar = {
 
 const AVISO_FILA = 'Já tem alguém na fila, tenta em instantes.'
 const AVISO_FALHA = 'Não deu pra pedir a vez agora. Tenta de novo.'
+const AVISO_PERMISSAO = 'Você não autorizou o compartilhamento'
 
 /**
  * Orquestra a disputa da vez sobre `useVez`: pede a vez, começa a publicar
@@ -21,7 +23,7 @@ const AVISO_FALHA = 'Não deu pra pedir a vez agora. Tenta de novo.'
 export function useTakeover(room: Room, salaId: string, apelido: string) {
   const eu = obterIdentidade()
   const vez = useVez(room, salaId)
-  const { estado, souDono, meuPedido, pedir } = vez
+  const { estado, souDono, meuPedido, pedir, liberar } = vez
 
   const [aviso, setAviso] = useState<string | null>(null)
   const opcaoRef = useRef<OpcaoCompartilhar | null>(null)
@@ -37,7 +39,15 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
 
   const concluirPedido = useCallback(
     async (opcao: OpcaoCompartilhar) => {
-      const decisao = await pedir(apelido)
+      let decisao: Decisao
+      try {
+        decisao = await pedir(apelido)
+      } catch {
+        // token-service ou floor fora do ar: não trava, só avisa.
+        opcaoRef.current = null
+        setAviso(AVISO_FALHA)
+        return
+      }
       if (decisao.resultado === 'aguardando') {
         opcaoRef.current = opcao
         return
@@ -45,7 +55,14 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
       // Qualquer outro desfecho encerra este pedido: não há pendência minha viva.
       opcaoRef.current = null
       if (decisao.resultado === 'concedido') {
-        await publicar(opcao)
+        try {
+          await publicar(opcao)
+        } catch {
+          // O usuário fechou o seletor de tela / negou a permissão:
+          // devolve a vez pra fila não ficar presa comigo.
+          setAviso(AVISO_PERMISSAO)
+          await liberar().catch(() => undefined)
+        }
       } else if (decisao.resultado === 'ocupado') {
         setAviso(AVISO_FILA)
       } else if (decisao.resultado === 'ignorado') {
@@ -53,7 +70,7 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
       }
       // 'recusado' | 'liberado': o listener da metadata já cuida do aviso.
     },
-    [pedir, apelido, publicar],
+    [pedir, apelido, publicar, liberar],
   )
 
   const aoCompartilhar = useCallback(

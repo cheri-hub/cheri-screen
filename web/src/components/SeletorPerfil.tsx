@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { PERFIS, type Perfil } from '../lib/perfis'
+import { av1Suportado } from '../lib/navegador'
+import { AvisoNavegador } from './AvisoNavegador'
 
 type Props = {
   aoCompartilhar: (perfil: Perfil, alta: boolean, preferirAv1: boolean) => void
@@ -10,6 +12,7 @@ export function SeletorPerfil({ aoCompartilhar }: Props) {
   const [alta, setAlta] = useState(false)
   const [preferirAv1, setPreferirAv1] = useState(false)
   const lista = Object.values(PERFIS)
+  const av1Disponivel = av1Suportado()
 
   return (
     <div className="space-y-3 rounded-xl bg-neutral-900 p-4">
@@ -32,25 +35,39 @@ export function SeletorPerfil({ aoCompartilhar }: Props) {
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-2 text-xs text-neutral-400">
+      <AvisoNavegador />
+      <label className="flex items-start gap-2 text-xs text-neutral-400">
         <input
           type="checkbox"
+          className="mt-0.5"
           checked={alta}
           onChange={(e) => setAlta(e.target.checked)}
         />
-        Melhor qualidade de imagem (usa mais internet)
+        <span>
+          Alta definição (1080p)
+          <span className="block text-neutral-500">dobra o consumo de banda</span>
+        </span>
       </label>
-      <label className="flex items-center gap-2 text-xs text-neutral-400">
+      <label className="flex items-start gap-2 text-xs text-neutral-400">
         <input
           type="checkbox"
-          checked={preferirAv1}
+          className="mt-0.5"
+          checked={preferirAv1 && av1Disponivel}
+          disabled={!av1Disponivel}
           onChange={(e) => setPreferirAv1(e.target.checked)}
         />
-        Economizar internet quando o navegador permitir
+        <span>
+          Usar AV1
+          <span className="block text-neutral-500">
+            economiza banda, mas exige mais do seu computador
+          </span>
+        </span>
       </label>
       <button
         type="button"
-        onClick={() => aoCompartilhar(PERFIS[escolhido], alta, preferirAv1)}
+        onClick={() =>
+          aoCompartilhar(PERFIS[escolhido], alta, preferirAv1 && av1Disponivel)
+        }
         className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium"
       >
         Compartilhar minha tela

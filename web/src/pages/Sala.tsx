@@ -16,7 +16,7 @@ import { SalaExpirada } from './SalaExpirada'
 export function Sala() {
   const { id = '' } = useParams()
   const [apelido, setApelido] = useState(obterApelido)
-  const { room, estado, participantes } = useSala(id, apelido)
+  const { room, estado, participantes, reconectando } = useSala(id, apelido)
 
   if (!apelido) {
     return (
@@ -33,6 +33,11 @@ export function Sala() {
 
   return (
     <main className="min-h-screen bg-neutral-950 p-6 text-neutral-100">
+      {reconectando && (
+        <p className="mb-4 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+          Reconectando…
+        </p>
+      )}
       {estado === 'conectando' && <p className="text-neutral-400">Conectando…</p>}
       {estado === 'erro' && (
         <p className="text-red-400">

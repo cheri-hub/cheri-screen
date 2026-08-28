@@ -9,6 +9,7 @@ export function useSala(salaId: string, apelido: string | null) {
   const [room, setRoom] = useState<Room | null>(null)
   const [estado, setEstado] = useState<EstadoConexao>('conectando')
   const [participantes, setParticipantes] = useState<string[]>([])
+  const [reconectando, setReconectando] = useState(false)
 
   useEffect(() => {
     if (!apelido) return
@@ -30,6 +31,8 @@ export function useSala(salaId: string, apelido: string | null) {
       .on(RoomEvent.ParticipantConnected, atualizarParticipantes)
       .on(RoomEvent.ParticipantDisconnected, atualizarParticipantes)
       .on(RoomEvent.Connected, atualizarParticipantes)
+      .on(RoomEvent.Reconnecting, () => setReconectando(true))
+      .on(RoomEvent.Reconnected, () => setReconectando(false))
 
     ;(async () => {
       try {
@@ -46,9 +49,10 @@ export function useSala(salaId: string, apelido: string | null) {
 
     return () => {
       cancelado = true
+      setReconectando(false)
       sala.disconnect()
     }
   }, [salaId, apelido])
 
-  return { room, estado, participantes }
+  return { room, estado, participantes, reconectando }
 }
