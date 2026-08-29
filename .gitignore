@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 *.log
+
+# Config preenchida específica da VPS (o modelo versionado é nginx/cheri-share.conf.example)
+/nginx/cheri-share.conf
 web/dist/
 token-service/dist/
 dados/
