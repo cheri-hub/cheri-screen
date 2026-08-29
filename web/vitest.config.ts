@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Vitest cobre só os testes unitários em src/. Os specs Playwright em e2e/
+    // rodam com `npm run e2e` e usariam APIs que o jsdom não tem.
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 })
