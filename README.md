@@ -1,16 +1,42 @@
-# Cheri-share
+# Cheri Screen
 
-Sala web privada para compartilhamento de tela entre amigos, uma de cada vez. LiveKit SFU auto-hospedado em VPS Linux + serviço de token Fastify, sem banco de dados, sem login.
+**tela ao vivo · uma por vez**
+
+Abre a sala, joga o link no grupo, mostra tua tela pra galera — jogo, filme, o
+que for. Um de cada vez, e quem quiser a vez, pede. Simples assim, cheri.
+
+Sem conta, sem login, sem banco de dados. O link é a chave e a sala some sozinha
+quando esvazia. LiveKit SFU auto-hospedado numa VPS Linux + um serviço de token
+em Fastify, e um front em React.
+
+## Como funciona
+
+- **Uma tela por vez.** Quem está no comando aparece pra todo mundo; os outros
+  assistem. Tem áudio de tela junto (Chrome ou Edge — Firefox e Safari mostram só
+  a imagem).
+- **Pedir a vez.** Clicou em compartilhar enquanto tem outra pessoa no ar? Vira um
+  pedido. Quem está no comando **cede** ou **recusa**. Silêncio de 30 segundos
+  cede a vez sozinho.
+- **Tela cheia.** Botão no canto do player joga a tela compartilhada em fullscreen.
+- **A moldura conta a história.** Ela muda de cor conforme a vez: magenta é você,
+  ciano são os outros, lima é "no ar", e um arco âmbar corre os 30s de um pedido.
+
+O estado da vez vive no `metadata` da sala do LiveKit, que replica pra todos os
+participantes sozinho — não tem servidor de estado próprio. A permissão de
+publicar sempre entra em `false`; só o token-service liga ela, e só pra quem
+ganhou a vez.
 
 ## Arquitetura
 
 ```
 Cliente Web (navegador)
-    ↓ wss://share.seudominio.com.br (bare origin, cliente anexa /rtc)
+    ↓ wss://cheri-screen.seudominio.com.br  (origin puro; o cliente anexa /rtc/v1)
 Nginx (443 SSL)
-    ↓ location /rtc → ws://127.0.0.1:7880 (upgrade WebSocket)
+    ├─ location /            → web/dist (estático, SPA)
+    ├─ location /api/        → 127.0.0.1:3010  (token-service, tira o prefixo)
+    └─ location /rtc         → 127.0.0.1:7880  (upgrade WebSocket, pega /rtc e /rtc/v1)
 LiveKit SFU (7880 signalling)
-    ↓ UDP 50000–50100 (media)
+    ↓ UDP 50000–50100 (mídia)  ·  TCP 7881 (contingência)
 Internet pública
 ```
 
@@ -32,16 +58,19 @@ cp .env.example .env
 
 - `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`: par de chaves gerado pelo LiveKit
 - `LIVEKIT_URL`: URL interna do SFU (`http://127.0.0.1:7880`)
-- `PUBLIC_HOST`: domínio público (sem protocolo), ex: `share.seudominio.com.br`
-- `PORT`: porta do token-service (padrão 3000)
-- `USAGE_METRIC` / `USAGE_FILE`: métrica Prometheus e arquivo de consumo
+- `PUBLIC_HOST`: domínio público (sem protocolo), ex: `cheri-screen.seudominio.com.br`
+- `PORT`: porta do token-service (padrão `3000`; troque se já estiver em uso na VPS)
+- `NODE_IP`: IP público anunciado nos candidatos ICE. Vazio = LiveKit detecta
+  sozinho (funciona com `use_external_ip: true`).
+- `USAGE_METRIC` / `USAGE_URL` / `USAGE_FILE`: métrica Prometheus dos bytes de
+  mídia enviados, endpoint do coletor, e o arquivo JSON de consumo
 
 ## Configuração
 
-Edite os arquivos de configuração de exemplo:
+Edite os arquivos de exemplo:
 
-- `nginx/cheri-share.conf.example` → `/etc/nginx/sites-available/cheri-share`
-  - Substitua `share.seudominio.com.br` pelo seu domínio
+- `nginx/cheri-share.conf.example` → `/etc/nginx/sites-available/cheri-screen.seudominio.com.br`
+  - Substitua o domínio de exemplo pelo seu
   - Substitua `/caminho/para/cheri-share/web/dist` pelo caminho real
   - Configure `ssl_certificate` e `ssl_certificate_key` com seus certificados Certbot
 
@@ -49,7 +78,7 @@ Edite os arquivos de configuração de exemplo:
 
 ### 1. Gerar chaves LiveKit
 
-Numa máquina com Docker, execute:
+Numa máquina com Docker:
 
 ```bash
 docker run --rm livekit/livekit-server generate-keys
@@ -70,6 +99,10 @@ LIVEKIT_API_SECRET=sB0...r2A
 ```
 
 ### 2. Subir o SFU na VPS
+
+O `docker-compose.yml` fixa `livekit/livekit-server:v1.13` — o `livekit-client`
+do front (2.x) fala o protocolo novo (`/rtc/v1`, `LocalTrackSubscribed`), que
+servidores 1.8.x ainda não têm. Não desça a imagem sem descer o cliente junto.
 
 Na VPS, com `.env` já configurado:
 
@@ -122,15 +155,15 @@ Esperado: `Default: deny (incoming)` e regras só para SSH, `443/tcp`,
 Na VPS, adapte `nginx/cheri-share.conf.example` e habilite:
 
 ```bash
-sudo cp nginx/cheri-share.conf.example /etc/nginx/sites-available/cheri-share
-sudo ln -s /etc/nginx/sites-available/cheri-share /etc/nginx/sites-enabled/
+sudo cp nginx/cheri-share.conf.example /etc/nginx/sites-available/cheri-screen.seudominio.com.br
+sudo ln -s /etc/nginx/sites-available/cheri-screen.seudominio.com.br /etc/nginx/sites-enabled/
 sudo nginx -t  # validar sintaxe
 sudo systemctl restart nginx
 ```
 
 ## Prova de mídia
 
-Valide que vídeo atravessa a VPS antes de prosseguir com as próximas tarefas.
+Valide que vídeo atravessa a VPS antes de prosseguir.
 
 ### Gerar token de teste
 
@@ -150,29 +183,22 @@ docker run --rm \
 
 Substitua `CHAVE` e `SEGREDO` pelos valores de `.env`.
 
-Exemplo de saída:
-
-```
-eyJhbGc...Zm9v
-```
-
 ### Teste em duas máquinas
 
-1. Abra navegador Firefox ou Chrome em **máquina A** (rede A):
+1. Abra Chrome ou Edge em **máquina A** (rede A):
    - Acesse https://meet.livekit.io/?tab=custom
-   - Em "Server URL": `wss://share.seudominio.com.br` (o cliente LiveKit anexa `/rtc` sozinho)
+   - Em "Server URL": `wss://cheri-screen.seudominio.com.br` (o cliente anexa `/rtc/v1` sozinho)
    - Em "Token": cole o token gerado acima
    - Clique "Join"
    - Ative câmera: esperado vídeo local no painel esquerdo
 
-2. Repita numa **máquina B** em rede **diferente** (use 4G, outro ISP, ou VPN de localização diferente):
-   - Mesmo URL de servidor
+2. Repita numa **máquina B** em rede **diferente** (use 4G, outro ISP, ou VPN de outra localização):
+   - Mesmo Server URL
    - **Token diferente**: rode `livekit-cli token create` de novo com **as mesmas
      chaves** (`--api-key` / `--api-secret` idênticos aos do `.env`) e só troque
      `--identity`. Gerar chaves novas com `generate-keys` produziria um par que o
      SFU não reconhece.
-   - Mesmo name de sala (`teste`)
-   - Identidade diferente (ex: `--identity tu` em vez de `eu`)
+   - Mesmo name de sala (`teste`), identidade diferente (ex: `--identity tu`)
    - Clique "Join"
 
 3. Confirme:
@@ -181,125 +207,124 @@ eyJhbGc...Zm9v
    - Áudio bidirecional fluindo
 
 **Se falhar:**
-- Verifique `docker compose logs livekit` na VPS
-- Confirme firewall: `sudo ufw status` deve mostrar `50000:50100/udp open`
-- Teste conectividade TCP: `nc -zv share.seudominio.com.br 7881`
-- Teste resolução DNS: `nslookup share.seudominio.com.br`
-- Confirme nginx: `sudo nginx -t` e `sudo systemctl status nginx`
+- `docker compose logs livekit` na VPS
+- Firewall: `sudo ufw status` deve mostrar `50000:50100/udp` liberado
+- TCP: `nc -zv cheri-screen.seudominio.com.br 7881`
+- DNS: `nslookup cheri-screen.seudominio.com.br`
+- nginx: `sudo nginx -t` e `sudo systemctl status nginx`
 
-**Este é o portão da fase 1.** Se mídia não fluir, não prossiga com as próximas tarefas.
+No log do LiveKit, `participant active` deve trazer um candidato selecionado com
+o **IP público** (não `172.x` de bridge docker) e `connectionType: udp`.
+
+**Este é o portão da fase 1.** Se mídia não fluir, não prossiga.
 
 ## Deploy em produção
 
-Pré-requisito: `.env` configurado e chaves de API do LiveKit definidas (ver seção "Ciclo de vida do SFU" acima).
+Pré-requisito: `.env` configurado com as chaves do LiveKit.
 
-### Construir o front e deploy
-
-Na VPS, execute:
+O repositório na VPS **não tem remote git** — o código é transferido por
+`tar | ssh` da máquina local:
 
 ```bash
-git pull
-docker compose run --rm web-build
-docker compose up -d --build
+# da máquina local, na raiz do repo
+tar czf - --exclude=node_modules --exclude=dist web docker-compose.yml \
+  | ssh SEU_VPS 'cd /opt/cheri-share && tar xzf -'
+```
+
+Na VPS, reconstrua o front e suba os containers:
+
+```bash
+cd /opt/cheri-share/web && npm ci && npm run build   # gera web/dist, servido direto pelo nginx
+cd /opt/cheri-share && docker compose up -d           # livekit + token-service
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### Configuração do nginx
+`web/dist` é servido estático pelo nginx — rebuildou, já está no ar, sem restart.
 
-O nginx deve servir o front-end estático em `root /caminho/para/cheri-share/web/dist;` e fazer proxy para o token-service e LiveKit.
+### Nginx
 
-**Importante:** O navegador conecta em `wss://PUBLIC_HOST` (sem `/rtc`). O `livekit-client` tenta `/rtc/v1` e cai para `/rtc` num 404; o bloco do nginx precisa ser `location /rtc` (**prefixo**, pega `/rtc` e `/rtc/v1`) e encaminhar para `ws://127.0.0.1:7880`. `location = /rtc` (match exato) quebra a conexão.
+O navegador conecta em `wss://PUBLIC_HOST` (sem `/rtc`). O `livekit-client` pede
+`/rtc/v1`; o bloco precisa ser `location /rtc` (**prefixo** — pega `/rtc` e
+`/rtc/v1`) encaminhando para `127.0.0.1:7880`. `location = /rtc` (match exato)
+quebra a conexão.
 
-Configuração:
+- Substitua `/caminho/para/cheri-share/web/dist` pelo caminho real
+- Configure `ssl_certificate` / `ssl_certificate_key` com os certificados Certbot
 
-- Substitua `/caminho/para/cheri-share/web/dist` pelo caminho real do repositório
-- Configure `ssl_certificate` e `ssl_certificate_key` com seus certificados Certbot
+### `.env`
 
-Exemplo:
-
-```bash
-sudo cp nginx/cheri-share.conf.example /etc/nginx/sites-available/cheri-share
-sudo sed -i 's|/caminho/para/cheri-share|/home/app/cheri-share|g' /etc/nginx/sites-available/cheri-share
-sudo ln -s /etc/nginx/sites-available/cheri-share /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Variáveis de ambiente
-
-O arquivo `.env` na raiz do repositório **nunca deve ser commitado**. Na VPS:
-
-1. Copie `.env.example` para `.env`
-2. Preencha as chaves de API e URL pública
-3. Verifique `.gitignore` contém `.env`
+O `.env` na raiz **nunca é commitado** (`.gitignore` cobre). Na VPS: copie
+`.env.example`, preencha as chaves e o `PUBLIC_HOST`.
 
 ## Verificação em produção
 
-Após deploy, é **essencial** validar que o sistema funciona em condições reais de NAT traversal. Testes locais não cobrem isso.
+Testes locais não cobrem NAT traversal. O app tem um só fluxo — **uma tela por
+vez, com áudio de tela, e pedido de takeover**. Sem câmera, microfone ou chat.
 
-O app tem um só fluxo: **uma tela por vez, com áudio de tela, e pedido de
-takeover**. Não há câmera, microfone nem chat (spec §1). O roteiro de verificação
-segue esse fluxo.
+### Fluxo completo, dois usuários, redes diferentes
 
-### Step 1: Fluxo completo com dois usuários em redes diferentes
+Precisa de **Chrome ou Edge** nas duas pontas e de duas redes **diferentes**
+(uma em 4G/5G, a outra em WiFi de outro ISP ou VPN).
 
-Precisa de **Chrome ou Edge** nas duas pontas (só eles capturam áudio de tela) e
-de duas redes **diferentes** (uma em 4G/5G, a outra em WiFi de outro ISP ou VPN).
-
-1. Na home, usuário A clica em **Criar sala** e copia o link.
+1. Na home, A clica em **Criar sala** e copia o link.
 2. A entra na sala (informa o apelido na primeira vez).
 3. B abre o mesmo link em outra rede e entra com outro apelido.
 4. A clica em **Compartilhar minha tela**, escolhe o perfil (**Tela** ou
    **Vídeo**), marca a caixa de áudio de tela no seletor do navegador e confirma.
 5. Confirme:
-   - [ ] B vê a tela de A (o texto "Ninguém está compartilhando agora" some)
+   - [ ] B vê a tela de A ("Ninguém está compartilhando agora" some)
    - [ ] O áudio da tela de A chega em B
    - [ ] A lista de participantes mostra os dois apelidos nas duas pontas
+   - [ ] O botão **Tela cheia** no player leva a imagem a fullscreen
 6. B clica em **Compartilhar minha tela** → A vê "B quer compartilhar a tela.".
 7. A clica em **Ceder**. Confirme:
-   - [ ] A publicação troca de dono: B passa a ver "Parar de compartilhar",
-         A volta a ver o seletor de perfil
-   - [ ] B agora enxerga a própria tela publicada e A vê a tela de B
+   - [ ] A vez troca de dono: B passa a ver "Parar de compartilhar", A volta ao
+         seletor de perfil
+   - [ ] B enxerga a própria tela publicada e A vê a tela de B
 8. Repita o passo 6 e, desta vez, **A não responde**. Após ~30s:
-   - [ ] A vez passa sozinha para B ("silêncio cede a vez", spec §6.2)
+   - [ ] A vez passa sozinha para B ("silêncio cede a vez")
    - [ ] B começa a transmitir sem clique extra
 
 **Se falhar:**
-- Verifique `docker compose logs livekit` na VPS
-- Confirme firewall: `sudo ufw status verbose` mostra `50000:50100/udp` e
-  `7881/tcp` liberados e `Default: deny (incoming)`
-- Teste TCP fallback: `nc -zv share.seudominio.com.br 7881`
+- `docker compose logs livekit` na VPS
+- `sudo ufw status verbose` mostra `50000:50100/udp` e `7881/tcp` liberados e
+  `Default: deny (incoming)`
+- TCP fallback: `nc -zv cheri-screen.seudominio.com.br 7881`
+- No console do navegador, `negotiation timed out` em loop + `v1 RTC path not
+  found` = servidor LiveKit velho demais pro cliente. Suba a imagem (ver §2).
 
-### Step 2: Teste contingência TCP (fallback UDP)
+### Contingência TCP (fallback UDP)
 
-Bloqueie temporariamente UDP para confirmar que a mídia cai para TCP:
-
-```bash
-# Na VPS
-sudo ufw deny 50000:50100/udp
-sudo ufw reload
-```
-
-Recarregue o navegador, tente reconectar e confirme:
-- [ ] A tela compartilhada ainda passa (via fallback TCP na porta 7881)
-- [ ] O áudio de tela ainda funciona (a latência pode subir um pouco)
-
-Reabra UDP:
+Bloqueie UDP temporariamente e confirme que a mídia cai para TCP:
 
 ```bash
-sudo ufw allow 50000:50100/udp
-sudo ufw reload
+# na VPS
+sudo ufw deny 50000:50100/udp && sudo ufw reload
 ```
 
-**Nota:** Este teste prova que o sistema é resiliente a problemas de conectividade UDP e não depende exclusivamente de UDP para funcionar.
+Recarregue o navegador, reconecte e confirme:
+- [ ] A tela compartilhada ainda passa (via TCP na 7881)
+- [ ] O áudio de tela ainda funciona (latência pode subir um pouco)
+
+Reabra:
+
+```bash
+sudo ufw allow 50000:50100/udp && sudo ufw reload
+```
 
 ## Métricas
 
-LiveKit expõe Prometheus em `http://127.0.0.1:6789/metrics`. Use para monitorar:
+LiveKit expõe Prometheus em `http://127.0.0.1:6789/metrics`. Confirme os nomes
+na sua versão: `curl -s 127.0.0.1:6789/metrics | grep -iE 'room|participant|bytes'`.
 
-- `livekit_rooms_total`: número total de salas
-- `livekit_participants`: participantes conectados
-- `livekit_node_bytes_out`: bytes enviados (consumo de banda)
+- `livekit_packet_bytes{direction="outgoing"}` — bytes de mídia enviados
+  (consumo de banda; `livekit_node_bytes_out` **não** existe nas versões 1.8–1.13)
+- séries de salas e participantes (o nome varia por versão — o `grep` acima mostra
+  quais existem)
+
+O coletor de consumo lê essa métrica de 60 em 60s, soma por prefixo, e grava
+`consumo.json` no volume `dados`. O front mostra o total do mês e da sessão no
+rodapé.
 
 ## Desenvolvimento local
 
@@ -321,11 +346,20 @@ cd web && npm install && npm run dev
 
 O `vite.config.ts` já faz proxy de `/api` para `http://127.0.0.1:3000`, então
 abra `http://localhost:5173` e o fluxo de criar/entrar na sala funciona ponta a
-ponta. Captura de tela exige contexto seguro: `localhost` conta como seguro nos
+ponta. Captura de tela exige contexto seguro — `localhost` conta como seguro nos
 navegadores baseados em Chromium.
 
 Testes: `npm test` em cada pacote. E2E (exige a pilha completa no ar):
 `cd web && npm run e2e`.
+
+## Stack
+
+| Camada | O quê |
+|---|---|
+| SFU | `livekit/livekit-server:v1.13`, Docker, `network_mode: host` |
+| Token-service | Node 22, Fastify 5, TypeScript ESM, `livekit-server-sdk` |
+| Front | React 18, Vite 5, Tailwind 3, react-router-dom 7, `livekit-client` |
+| Testes | Vitest (+ jsdom no front), Playwright, oxlint |
 
 ## Licença
 
