@@ -101,4 +101,30 @@ describe('decide — liberar', () => {
     const r = decide(ana, ['ana', 'pedro'], AGORA, { tipo: 'liberar', identity: 'pedro' });
     expect(r.decisao).toEqual({ resultado: 'ignorado', motivo: 'nao-e-o-dono' });
   });
+
+  it('passa a vez direto para quem aguardava quando o dono libera', () => {
+    const comPedido: EstadoDaVez = {
+      ...ana,
+      pending: { identity: 'pedro', nome: 'Pedro', expiraEm: AGORA + ESPERA_MS },
+    };
+    const r = decide(comPedido, ['ana', 'pedro'], AGORA, {
+      tipo: 'liberar', identity: 'ana',
+    });
+    expect(r.decisao).toEqual({ resultado: 'concedido', para: 'pedro', revogarDe: 'ana' });
+    expect(r.estado.sharer?.identity).toBe('pedro');
+    expect(r.estado.pending).toBeNull();
+  });
+
+  it('esvazia a sala quando o pedido pendente já expirou', () => {
+    const comPedidoVelho: EstadoDaVez = {
+      ...ana,
+      pending: { identity: 'pedro', nome: 'Pedro', expiraEm: AGORA - 1 },
+    };
+    const r = decide(comPedidoVelho, ['ana', 'pedro'], AGORA, {
+      tipo: 'liberar', identity: 'ana',
+    });
+    expect(r.decisao).toEqual({ resultado: 'liberado', revogarDe: 'ana' });
+    expect(r.estado.sharer).toBeNull();
+    expect(r.estado.pending).toBeNull();
+  });
 });

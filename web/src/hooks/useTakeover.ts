@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RoomEvent, type Room } from 'livekit-client'
+import {
+  RoomEvent,
+  createLocalScreenTracks,
+  type LocalTrack,
+  type Room,
+  type TrackPublishOptions,
+} from 'livekit-client'
 import { lerEstadoDaVez, useVez } from './useVez'
 import { obterIdentidade } from '../lib/identidade'
 import { escolherCodec, opcoesDeCaptura, type Perfil } from '../lib/perfis'
@@ -14,11 +20,14 @@ export type OpcaoCompartilhar = {
 const AVISO_FILA = 'Já tem alguém na fila, tenta em instantes.'
 const AVISO_FALHA = 'Não deu pra pedir a vez agora. Tenta de novo.'
 const AVISO_PERMISSAO = 'Você não autorizou o compartilhamento'
+const AVISO_LIVRE = 'A vez ficou livre, pedindo de novo…'
 
 /**
- * Orquestra a disputa da vez sobre `useVez`: pede a vez, começa a publicar
- * quando é concedida, guarda a escolha para reenviar ao vencer os 30s ou
- * quando a vez fica livre, e avisa o solicitante quando o pedido é recusado.
+ * Orquestra a disputa da vez sobre `useVez` com captura antecipada: ao clicar
+ * em compartilhar, `getDisplayMedia` roda enquanto a ativação do usuário ainda
+ * vale e as tracks ficam retidas; só então o pedido da vez é enviado. As tracks
+ * são publicadas assim que `souDono` fica verdadeiro por qualquer caminho —
+ * resposta própria, cessão via metadata ou reenvio após os 30s.
  */
 export function useTakeover(room: Room, salaId: string, apelido: string) {
   const eu = obterIdentidade()
@@ -26,82 +35,118 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
   const { estado, souDono, meuPedido, pedir, liberar } = vez
 
   const [aviso, setAviso] = useState<string | null>(null)
-  const opcaoRef = useRef<OpcaoCompartilhar | null>(null)
+  const tracksRef = useRef<LocalTrack[] | null>(null)
+  const publicacaoRef = useRef<TrackPublishOptions | null>(null)
+  const publicandoRef = useRef(false)
 
-  const publicar = useCallback(
-    async ({ perfil, alta, preferirAv1 }: OpcaoCompartilhar) => {
-      const codec = escolherCodec(preferirAv1)
-      const { captura, publicacao } = opcoesDeCaptura(perfil, alta, codec)
-      await room.localParticipant.setScreenShareEnabled(true, captura, publicacao)
-    },
-    [room],
-  )
+  const descartarTracks = useCallback(() => {
+    for (const t of tracksRef.current ?? []) t.stop()
+    tracksRef.current = null
+    publicacaoRef.current = null
+  }, [])
 
-  const concluirPedido = useCallback(
-    async (opcao: OpcaoCompartilhar) => {
-      let decisao: Decisao
-      try {
-        decisao = await pedir(apelido)
-      } catch {
-        // token-service ou floor fora do ar: não trava, só avisa.
-        opcaoRef.current = null
-        setAviso(AVISO_FALHA)
-        return
+  // Publica as tracks retidas. Idempotente: o lock evita publicar duas vezes
+  // quando resposta própria e mudança de metadata chegam quase juntas.
+  const publicarTracks = useCallback(async () => {
+    const tracks = tracksRef.current
+    if (!tracks || publicandoRef.current) return
+    publicandoRef.current = true
+    try {
+      for (const track of tracks) {
+        await room.localParticipant.publishTrack(
+          track,
+          publicacaoRef.current ?? undefined,
+        )
       }
-      if (decisao.resultado === 'aguardando') {
-        opcaoRef.current = opcao
-        return
-      }
-      // Qualquer outro desfecho encerra este pedido: não há pendência minha viva.
-      opcaoRef.current = null
-      if (decisao.resultado === 'concedido') {
-        try {
-          await publicar(opcao)
-        } catch {
-          // O usuário fechou o seletor de tela / negou a permissão:
-          // devolve a vez pra fila não ficar presa comigo.
-          setAviso(AVISO_PERMISSAO)
-          await liberar().catch(() => undefined)
-        }
-      } else if (decisao.resultado === 'ocupado') {
-        setAviso(AVISO_FILA)
-      } else if (decisao.resultado === 'ignorado') {
-        setAviso(AVISO_FALHA)
-      }
-      // 'recusado' | 'liberado': o listener da metadata já cuida do aviso.
-    },
-    [pedir, apelido, publicar, liberar],
-  )
+      tracksRef.current = null
+    } catch {
+      // Publicação recusada pelo SFU: devolve a vez pra fila não travar.
+      descartarTracks()
+      setAviso(AVISO_FALHA)
+      await liberar().catch(() => undefined)
+    } finally {
+      publicandoRef.current = false
+    }
+  }, [room, descartarTracks, liberar])
+
+  // Envia (ou reenvia) o pedido da vez. A captura já aconteceu no clique.
+  const concluirPedido = useCallback(async () => {
+    if (!tracksRef.current) return
+    let decisao: Decisao
+    try {
+      decisao = await pedir(apelido)
+    } catch {
+      // token-service ou floor fora do ar: não trava, só avisa.
+      descartarTracks()
+      setAviso(AVISO_FALHA)
+      return
+    }
+    if (decisao.resultado === 'aguardando') return
+    if (decisao.resultado === 'concedido') {
+      await publicarTracks()
+    } else if (decisao.resultado === 'ocupado') {
+      descartarTracks()
+      setAviso(AVISO_FILA)
+    } else if (decisao.resultado === 'ignorado') {
+      descartarTracks()
+      setAviso(AVISO_FALHA)
+    }
+    // 'recusado' | 'liberado': o listener da metadata cuida do aviso e do descarte.
+  }, [pedir, apelido, publicarTracks, descartarTracks])
 
   const aoCompartilhar = useCallback(
-    (perfil: Perfil, alta: boolean, preferirAv1: boolean) => {
+    async (perfil: Perfil, alta: boolean, preferirAv1: boolean) => {
       setAviso(null)
-      void concluirPedido({ perfil, alta, preferirAv1 })
+      if (tracksRef.current || souDono) return
+      const codec = escolherCodec(preferirAv1)
+      const { captura, publicacao } = opcoesDeCaptura(perfil, alta, codec)
+      try {
+        // getDisplayMedia enquanto o clique ainda conta como ativação do usuário.
+        tracksRef.current = await createLocalScreenTracks(captura)
+      } catch {
+        setAviso(AVISO_PERMISSAO)
+        return
+      }
+      publicacaoRef.current = publicacao
+      await concluirPedido()
     },
-    [concluirPedido],
+    [concluirPedido, souDono],
   )
 
   const aoExpirar = useCallback(() => {
-    if (opcaoRef.current) void concluirPedido(opcaoRef.current)
+    if (tracksRef.current) void concluirPedido()
   }, [concluirPedido])
 
-  // A vez ficou livre enquanto eu aguardava: reenvia na hora, sem esperar os 30s.
+  // Virei dono por qualquer caminho (resposta própria, cessão via metadata,
+  // reenvio pós-30s): publica o que está retido.
   useEffect(() => {
-    if (meuPedido && !estado.sharer && opcaoRef.current) {
-      void concluirPedido(opcaoRef.current)
+    if (souDono && tracksRef.current) void publicarTracks()
+  }, [souDono, publicarTracks])
+
+  // A vez esvaziou enquanto eu aguardava: reenvia na hora, sem esperar os 30s.
+  useEffect(() => {
+    if (meuPedido && !estado.sharer && tracksRef.current) {
+      void concluirPedido()
     }
   }, [meuPedido, estado.sharer, concluirPedido])
 
-  // Quem tinha a vez recusou: reajo à transição da metadata (evento externo),
-  // não a um efeito — o pedido some sem eu virar dono.
+  // Meu pedido sumiu da metadata sem eu virar dono: reajo à transição
+  // (evento externo), não a um efeito.
   useEffect(() => {
     let tinhaMeuPedido = lerEstadoDaVez(room.metadata).pending?.identity === eu
     const aoMudar = () => {
       const atual = lerEstadoDaVez(room.metadata)
       const souODono = atual.sharer?.identity === eu
       if (tinhaMeuPedido && !atual.pending && !souODono) {
-        opcaoRef.current = null
-        if (atual.sharer) setAviso(`${atual.sharer.nome} preferiu continuar.`)
+        if (atual.sharer) {
+          descartarTracks()
+          setAviso(`${atual.sharer.nome} preferiu continuar.`)
+        } else if (tracksRef.current) {
+          setAviso(AVISO_LIVRE)
+          void concluirPedido()
+        } else {
+          descartarTracks()
+        }
       }
       tinhaMeuPedido = atual.pending?.identity === eu
     }
@@ -109,7 +154,7 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
     return () => {
       room.off(RoomEvent.RoomMetadataChanged, aoMudar)
     }
-  }, [room, eu])
+  }, [room, eu, concluirPedido, descartarTracks])
 
   // Perdi a vez enquanto ainda publicava: paro de transmitir.
   useEffect(() => {
@@ -117,6 +162,9 @@ export function useTakeover(room: Room, salaId: string, apelido: string) {
       void room.localParticipant.setScreenShareEnabled(false)
     }
   }, [souDono, room])
+
+  // Saí da tela sem publicar: não deixa a captura viva.
+  useEffect(() => descartarTracks, [descartarTracks])
 
   return { ...vez, aviso, aoCompartilhar, aoExpirar }
 }

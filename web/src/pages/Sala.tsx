@@ -82,7 +82,10 @@ export function SalaConectada({
   } = useTakeover(room, salaId, apelido)
 
   useEffect(() => {
-    const aoDespublicar = () => void liberar()
+    // Só o caminho "parou pela barra nativa do Chrome" (spec §6.4): o botão
+    // libera a vez explicitamente. `.catch` engole o 403 do disparo em dobro
+    // (vídeo + áudio de tela geram dois LocalTrackUnpublished).
+    const aoDespublicar = () => void liberar().catch(() => undefined)
     room.on(RoomEvent.LocalTrackUnpublished, aoDespublicar)
     return () => {
       room.off(RoomEvent.LocalTrackUnpublished, aoDespublicar)
@@ -90,6 +93,9 @@ export function SalaConectada({
   }, [room, liberar])
 
   async function pararDeCompartilhar() {
+    // Libera a vez antes de despublicar: funciona mesmo quando a vez é detida
+    // sem track publicada e evita depender do evento de track.
+    await liberar().catch(() => undefined)
     await room.localParticipant.setScreenShareEnabled(false)
   }
 

@@ -10,13 +10,23 @@ const api = vi.hoisted(() => ({
   liberarVez: vi.fn(),
 }))
 
+const lk = vi.hoisted(() => ({
+  createLocalScreenTracks: vi.fn(),
+}))
+
 vi.mock('../lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/api')>()),
   ...api,
 }))
 
-// `escolherCodec` sonda APIs de WebRTC ausentes no jsdom; `opcoesDeCaptura`
-// e `PERFIS` continuam reais para a asserção da opção lembrada valer.
+// `createLocalScreenTracks` roda `getDisplayMedia`, ausente no jsdom;
+// `escolherCodec` sonda APIs de WebRTC também ausentes. `opcoesDeCaptura` e
+// `PERFIS` seguem reais para a asserção da opção lembrada valer.
+vi.mock('livekit-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('livekit-client')>()),
+  createLocalScreenTracks: lk.createLocalScreenTracks,
+}))
+
 vi.mock('../lib/perfis', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/perfis')>()),
   escolherCodec: vi.fn(() => 'vp9'),
@@ -32,9 +42,8 @@ function salaFalsa() {
     metadata: undefined as string | undefined,
     localParticipant: {
       isScreenShareEnabled: false,
-      setScreenShareEnabled: vi.fn<
-        (ligar: boolean, captura?: unknown, publicacao?: unknown) => Promise<void>
-      >(async () => {}),
+      setScreenShareEnabled: vi.fn(async () => {}),
+      publishTrack: vi.fn(async () => {}),
     },
     on(evento: string, cb: Ouvinte) {
       const set = ouvintes.get(evento) ?? new Set<Ouvinte>()
@@ -72,6 +81,8 @@ describe('useTakeover — ramos da disputa da vez', () => {
     api.pedirVez.mockReset()
     api.responderVez.mockReset()
     api.liberarVez.mockReset()
+    lk.createLocalScreenTracks.mockReset()
+    lk.createLocalScreenTracks.mockImplementation(async () => [{ stop: vi.fn() }])
     api.pedirVez.mockResolvedValue({ decisao: { resultado: 'aguardando', dono: 'ana' } })
   })
 
@@ -81,13 +92,15 @@ describe('useTakeover — ramos da disputa da vez', () => {
     const { result } = montar(sala)
 
     await act(async () => {
-      result.current.aoCompartilhar(PERFIS.tela, false, false)
+      await result.current.aoCompartilhar(PERFIS.tela, false, false)
     })
 
+    expect(lk.createLocalScreenTracks).toHaveBeenCalled()
     expect(api.pedirVez).toHaveBeenCalledWith('s1', EU, 'Pedro')
     await waitFor(() =>
       expect(result.current.aviso).toBe('Já tem alguém na fila, tenta em instantes.'),
     )
+    expect(sala.localParticipant.publishTrack).not.toHaveBeenCalled()
   })
 
   it('branch 5: meu pedido some da metadata sem eu virar dono → aviso de recusa', () => {
@@ -124,7 +137,25 @@ describe('useTakeover — ramos da disputa da vez', () => {
     expect(sala.localParticipant.setScreenShareEnabled).toHaveBeenCalledWith(false)
   })
 
-  it('branch 7: a vez fica livre enquanto aguardo → reenvia na hora com a opção lembrada', async () => {
+  it('C1: a metadata me torna dono sem resposta "concedido" minha → publica as tracks retidas', async () => {
+    const sala = salaFalsa()
+    const { result } = montar(sala)
+
+    await act(async () => {
+      await result.current.aoCompartilhar(PERFIS.tela, false, false)
+    })
+    await waitFor(() => expect(api.pedirVez).toHaveBeenCalledTimes(1))
+    expect(sala.localParticipant.publishTrack).not.toHaveBeenCalled()
+
+    // Ana cede: só a metadata muda no navegador do Pedro.
+    await act(async () => {
+      sala.emitir(metadata({ identity: EU, nome: 'Pedro', desde: 2 }, null))
+    })
+
+    await waitFor(() => expect(sala.localParticipant.publishTrack).toHaveBeenCalled())
+  })
+
+  it('C2: passados os 30s, aoExpirar concede a vez e publica sem recapturar', async () => {
     api.pedirVez
       .mockResolvedValueOnce({ decisao: { resultado: 'aguardando', dono: 'ana' } })
       .mockResolvedValueOnce({
@@ -134,7 +165,43 @@ describe('useTakeover — ramos da disputa da vez', () => {
     const { result } = montar(sala)
 
     await act(async () => {
-      result.current.aoCompartilhar(PERFIS.video, true, false)
+      await result.current.aoCompartilhar(PERFIS.tela, false, false)
+    })
+    await waitFor(() => expect(api.pedirVez).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      result.current.aoExpirar()
+    })
+
+    await waitFor(() => expect(sala.localParticipant.publishTrack).toHaveBeenCalled())
+    expect(lk.createLocalScreenTracks).toHaveBeenCalledTimes(1)
+    expect(result.current.aviso).not.toBe('Você não autorizou o compartilhamento')
+  })
+
+  it('C2b: sem captura de tela autorizada → avisa e não pede a vez', async () => {
+    lk.createLocalScreenTracks.mockRejectedValue(new Error('negado'))
+    const sala = salaFalsa()
+    const { result } = montar(sala)
+
+    await act(async () => {
+      await result.current.aoCompartilhar(PERFIS.tela, false, false)
+    })
+
+    expect(result.current.aviso).toBe('Você não autorizou o compartilhamento')
+    expect(api.pedirVez).not.toHaveBeenCalled()
+  })
+
+  it('branch 7 / (c): a vez fica livre enquanto aguardo → reenvia e publica a opção lembrada', async () => {
+    api.pedirVez
+      .mockResolvedValueOnce({ decisao: { resultado: 'aguardando', dono: 'ana' } })
+      .mockResolvedValueOnce({
+        decisao: { resultado: 'concedido', para: EU, revogarDe: 'ana' },
+      })
+    const sala = salaFalsa()
+    const { result } = montar(sala)
+
+    await act(async () => {
+      await result.current.aoCompartilhar(PERFIS.video, true, false)
     })
     await waitFor(() => expect(api.pedirVez).toHaveBeenCalledTimes(1))
 
@@ -147,15 +214,13 @@ describe('useTakeover — ramos da disputa da vez', () => {
 
     await waitFor(() => expect(api.pedirVez).toHaveBeenCalledTimes(2))
     await waitFor(() =>
-      expect(sala.localParticipant.setScreenShareEnabled).toHaveBeenCalled(),
+      expect(sala.localParticipant.publishTrack).toHaveBeenCalled(),
     )
 
-    const chamada = sala.localParticipant.setScreenShareEnabled.mock.calls.at(-1)
-    const captura = chamada?.[1] as {
+    const captura = lk.createLocalScreenTracks.mock.calls[0]?.[0] as {
       resolution?: { width?: number }
       contentHint?: string
     }
-    expect(chamada?.[0]).toBe(true)
     expect(captura?.resolution?.width).toBe(1920) // alta: true
     expect(captura?.contentHint).toBe('motion') // PERFIS.video
   })

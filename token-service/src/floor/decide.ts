@@ -88,9 +88,16 @@ function responder(
 
 function liberar(
   estado: EstadoDaVez,
+  agora: number,
   ev: Extract<Evento, { tipo: 'liberar' }>,
 ): Resultado {
   if (estado.sharer?.identity !== ev.identity) return ignorar(estado, 'nao-e-o-dono');
+  const pend = estado.pending;
+  // Quem esperava a vez não pode ficar no silêncio: se há pedido vivo, a vez
+  // liberada passa direto pra ele em vez de a sala esvaziar.
+  if (pend && pend.expiraEm > agora) {
+    return conceder(estado, pend.identity, pend.nome, agora);
+  }
   return {
     estado: { sharer: null, pending: null },
     decisao: { resultado: 'liberado', revogarDe: ev.identity },
@@ -110,6 +117,6 @@ export function decide(
     case 'responder':
       return responder(base, agora, evento);
     case 'liberar':
-      return liberar(base, evento);
+      return liberar(base, agora, evento);
   }
 }
