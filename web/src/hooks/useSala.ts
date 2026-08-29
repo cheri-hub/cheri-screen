@@ -33,6 +33,14 @@ export function useSala(salaId: string, apelido: string | null) {
       .on(RoomEvent.Connected, atualizarParticipantes)
       .on(RoomEvent.Reconnecting, () => setReconectando(true))
       .on(RoomEvent.Reconnected, () => setReconectando(false))
+      .on(RoomEvent.Disconnected, () => {
+        // Fora de um teardown normal (troca de sala/desmontagem), um
+        // Disconnected é reconexão que falhou de vez: não deixa a faixa
+        // "Reconectando…" pendurada pra sempre.
+        if (cancelado) return
+        setReconectando(false)
+        setEstado('erro')
+      })
 
     ;(async () => {
       try {
