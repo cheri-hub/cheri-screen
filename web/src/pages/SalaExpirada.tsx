@@ -2,16 +2,17 @@ import { Link } from 'react-router-dom'
 
 export function SalaExpirada() {
   return (
-    <main className="grid min-h-screen place-items-center bg-neutral-950 p-6 text-center text-neutral-100">
-      <div className="space-y-4">
-        <h1 className="text-2xl font-semibold">Essa sala não existe mais</h1>
-        <p className="text-neutral-400">
-          As salas somem sozinhas alguns minutos depois que todo mundo sai.
+    <main className="grid min-h-screen place-items-center px-6 text-center">
+      <div className="max-w-sm">
+        <p className="hud-label mb-4 text-danger">sala fechada</p>
+        <h1 className="font-display text-3xl font-bold uppercase leading-tight">
+          Essa sala não existe mais
+        </h1>
+        <p className="mt-4 text-ink-dim">
+          As salas somem sozinhas alguns minutos depois que todo mundo sai. Sem
+          drama — abre outra.
         </p>
-        <Link
-          to="/"
-          className="inline-block rounded-lg bg-emerald-500 px-4 py-2 font-medium text-neutral-950"
-        >
+        <Link to="/" className="btn-cheri mt-8 inline-block px-6 py-3 text-sm">
           Criar uma nova
         </Link>
       </div>

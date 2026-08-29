@@ -15,60 +15,72 @@ export function SeletorPerfil({ aoCompartilhar }: Props) {
   const av1Disponivel = av1Suportado()
 
   return (
-    <div className="space-y-3 rounded-xl bg-neutral-900 p-4">
-      <p className="text-sm font-medium text-neutral-300">O que você vai mostrar?</p>
+    <div className="chanfro border border-line bg-panel p-4">
+      <p className="hud-label mb-3 text-p1">O que você vai mostrar?</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        {lista.map((perfil) => (
-          <button
-            key={perfil.id}
-            type="button"
-            aria-pressed={escolhido === perfil.id}
-            onClick={() => setEscolhido(perfil.id)}
-            className={`rounded-lg border p-3 text-left ${
-              escolhido === perfil.id
-                ? 'border-emerald-500 bg-neutral-800'
-                : 'border-neutral-700'
-            }`}
-          >
-            <span className="block text-sm font-medium">{perfil.rotulo}</span>
-            <span className="block text-xs text-neutral-400">{perfil.descricao}</span>
-          </button>
-        ))}
+        {lista.map((perfil) => {
+          const ativo = escolhido === perfil.id
+          return (
+            <button
+              key={perfil.id}
+              type="button"
+              aria-pressed={ativo}
+              onClick={() => setEscolhido(perfil.id)}
+              className={`chanfro border p-3 text-left transition-colors ${
+                ativo
+                  ? 'border-p1 bg-panel-hi shadow-glow-p1'
+                  : 'border-line hover:border-p2'
+              }`}
+            >
+              <span className="block font-display text-sm font-semibold uppercase tracking-wide">
+                {perfil.rotulo}
+              </span>
+              <span className="mt-0.5 block text-xs text-ink-dim">
+                {perfil.descricao}
+              </span>
+            </button>
+          )
+        })}
       </div>
-      <AvisoNavegador />
-      <label className="flex items-start gap-2 text-xs text-neutral-400">
+
+      <div className="mt-3">
+        <AvisoNavegador />
+      </div>
+
+      <label className="mt-3 flex items-start gap-2 font-mono text-xs text-ink-dim">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 accent-p1"
           checked={alta}
           onChange={(e) => setAlta(e.target.checked)}
         />
         <span>
           Alta definição (1080p)
-          <span className="block text-neutral-500">dobra o consumo de banda</span>
+          <span className="block text-ink-dim/60">dobra o consumo de banda</span>
         </span>
       </label>
-      <label className="flex items-start gap-2 text-xs text-neutral-400">
+      <label className="mt-2 flex items-start gap-2 font-mono text-xs text-ink-dim">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 accent-p1"
           checked={preferirAv1 && av1Disponivel}
           disabled={!av1Disponivel}
           onChange={(e) => setPreferirAv1(e.target.checked)}
         />
         <span>
           Usar AV1
-          <span className="block text-neutral-500">
+          <span className="block text-ink-dim/60">
             economiza banda, mas exige mais do seu computador
           </span>
         </span>
       </label>
+
       <button
         type="button"
         onClick={() =>
           aoCompartilhar(PERFIS[escolhido], alta, preferirAv1 && av1Disponivel)
         }
-        className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium"
+        className="btn-cheri mt-4 w-full py-2.5 text-sm"
       >
         Compartilhar minha tela
       </button>

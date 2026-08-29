@@ -4,15 +4,18 @@ interface ParticipantesProps {
 
 export function Participantes({ nomes }: ParticipantesProps) {
   return (
-    <ul className="space-y-1">
-      {nomes.map((nome, i) => (
-        <li
-          key={`${nome}-${i}`}
-          className="rounded-lg bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-        >
-          {nome}
-        </li>
-      ))}
-    </ul>
+    <div>
+      <p className="hud-label mb-2">na sala · {nomes.length}</p>
+      <ul className="roster flex flex-wrap gap-2">
+        {nomes.map((nome, i) => (
+          <li
+            key={`${nome}-${i}`}
+            className="chanfro flex items-center border border-line bg-panel py-2 pr-3 font-mono text-sm text-ink"
+          >
+            {nome}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

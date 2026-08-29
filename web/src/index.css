@@ -1,3 +1,221 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   Cheri Screen — direção "2-Player / Bi-Lighting"
+   magenta = você · ciano = os outros · lima = no ar · âmbar = 30s
+   ───────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    --void: #140720;
+    --panel: #1f0f35;
+    --panel-hi: #2c1650;
+    --line: #3a2260;
+    --p1: #ff3daf;
+    --p2: #31e7f5;
+    --live: #b9ff3c;
+    --wait: #ffc24b;
+    --ink: #f4e9ff;
+    --ink-dim: #9c86c4;
+    /* canto de gabinete de fliperama: chanfro de 8px */
+    --chanfro: polygon(
+      8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px
+    );
+  }
+
+  html {
+    background: var(--void);
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(120% 80% at 15% 0%, #2a0f4a 0%, transparent 55%),
+      radial-gradient(120% 90% at 100% 100%, #12233a 0%, transparent 45%),
+      var(--void);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: 'Hanken Grotesk', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--p1);
+    color: var(--void);
+  }
+
+  /* foco visível de teclado — coerente com o duotone */
+  :focus-visible {
+    outline: 2px solid var(--p2);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Chakra Petch', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  input {
+    font-family: 'Space Mono', ui-monospace, monospace;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--panel); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border: 2px solid var(--panel);
+  }
+}
+
+@layer components {
+  /* ── superfícies chanfradas (gabinete) ───────────────────── */
+  .chanfro { clip-path: var(--chanfro); }
+
+  /* ── botão primário: a ação da vez ───────────────────────── */
+  .btn-cheri {
+    clip-path: var(--chanfro);
+    background: var(--p1);
+    color: var(--void);
+    font-family: 'Chakra Petch', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: filter 0.12s ease, transform 0.12s ease;
+  }
+  .btn-cheri:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn-cheri:active:not(:disabled) { transform: translateY(0); }
+  .btn-cheri:disabled { opacity: 0.45; }
+
+  /* botão secundário / fantasma */
+  .btn-fantasma {
+    clip-path: var(--chanfro);
+    background: var(--panel-hi);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font-family: 'Space Mono', ui-monospace, monospace;
+    letter-spacing: 0.02em;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .btn-fantasma:hover { background: var(--line); border-color: var(--p2); }
+
+  /* ── etiqueta HUD (mono, caixa alta) ─────────────────────── */
+  .hud-label {
+    font-family: 'Space Mono', ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  /* ── ASSINATURA: a moldura da tela = o estado da vez ─────── */
+  .tela-bezel {
+    position: relative;
+    padding: 10px;
+    clip-path: var(--chanfro);
+    background: var(--panel);
+    transition: box-shadow 0.35s ease, background 0.35s ease;
+  }
+  .tela-bezel::after {
+    /* arco de 30s do pedido de vez (âmbar), sob controle de --progresso */
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 3px;
+    clip-path: var(--chanfro);
+    background: conic-gradient(
+      var(--wait) calc(var(--progresso, 0) * 1turn),
+      transparent 0
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+  .tela-bezel[data-turno='livre']    { box-shadow: inset 0 0 0 1px var(--line); }
+  .tela-bezel[data-turno='voce']     { box-shadow: inset 0 0 0 2px var(--p1), 0 0 40px -8px var(--p1); }
+  .tela-bezel[data-turno='outro']    { box-shadow: inset 0 0 0 2px var(--p2), 0 0 40px -8px var(--p2); }
+  .tela-bezel[data-turno='voce-live']  { box-shadow: inset 0 0 0 2px var(--p1), 0 0 44px -6px var(--p1); animation: respira 2.4s ease-in-out infinite; }
+  .tela-bezel[data-turno='outro-live'] { box-shadow: inset 0 0 0 2px var(--p2), 0 0 44px -6px var(--p2); animation: respira 2.4s ease-in-out infinite; }
+  .tela-bezel[data-disputa='sim']::after { opacity: 1; }
+
+  /* ── roster: P1 / P2 / P3… (ordem de entrada = número) ───── */
+  .roster { counter-reset: player; }
+  .roster > li {
+    counter-increment: player;
+    position: relative;
+    padding-left: 3.25rem;
+  }
+  .roster > li::before {
+    content: 'P' counter(player);
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Space Mono', ui-monospace, monospace;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--p2);
+  }
+  .roster > li:first-child::before { color: var(--p1); }
+
+  /* faixa "no comando" — único momento holográfico do app */
+  .holo-borda {
+    position: relative;
+  }
+  .holo-borda::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    clip-path: var(--chanfro);
+    background: conic-gradient(from 0deg, var(--p1), var(--p2), var(--live), var(--p1));
+    z-index: -1;
+    animation: girar-holo 6s linear infinite;
+  }
+}
+
+@keyframes respira {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.22); }
+}
+@keyframes girar-holo {
+  to { transform: rotate(360deg); }
+}
+@keyframes varredura {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  8%   { opacity: 0.5; }
+  50%  { opacity: 0.5; }
+  92%  { opacity: 0; }
+  100% { transform: translateY(2200%); opacity: 0; }
+}
+@keyframes sobe-hud {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pisca-live {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.anima-hud { animation: sobe-hud 0.28s ease both; }
+.ponto-live { animation: pisca-live 1.1s steps(1, end) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -35,8 +35,13 @@ export function AguardandoResposta({
   }, [expiraEm, aoExpirar])
 
   return (
-    <div className="rounded-lg bg-amber-500/15 px-4 py-2 text-sm text-amber-200">
-      Aguardando <strong>{dono}</strong> responder… {restante}s
+    <div className="chanfro anima-hud flex items-center gap-3 border border-wait/50 bg-wait/10 px-4 py-2.5">
+      <span className="font-mono text-2xl font-bold leading-none text-wait">
+        {restante}s
+      </span>
+      <span className="text-sm text-ink-dim">
+        Aguardando <span className="text-ink">{dono}</span> responder…
+      </span>
     </div>
   )
 }

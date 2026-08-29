@@ -49,7 +49,7 @@ export function Player({ room }: { room: Room }) {
   }, [room])
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+    <div className="chanfro relative aspect-video w-full overflow-hidden bg-black">
       <video
         ref={ref}
         autoPlay
@@ -57,9 +57,11 @@ export function Player({ room }: { room: Room }) {
         className="h-full w-full object-contain"
       />
       {!temVideo && (
-        <p className="absolute inset-0 grid place-items-center text-neutral-500">
-          Ninguém está compartilhando agora
-        </p>
+        <div className="absolute inset-0 grid place-items-center">
+          <p className="hud-label !tracking-[0.2em]">
+            Ninguém está compartilhando agora
+          </p>
+        </div>
       )}
     </div>
   )

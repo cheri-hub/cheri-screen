@@ -26,7 +26,7 @@ export function Medidor() {
   if (bytes === null || inicial === null) return null
 
   return (
-    <p className="text-xs text-neutral-500">
+    <p className="border-t border-line pt-3 font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-ink-dim/70">
       essa sessão: {emGb(bytes - inicial)} GB · mês: {emGb(bytes)} GB
     </p>
   )
