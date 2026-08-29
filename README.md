@@ -6,9 +6,9 @@ Sala web privada para compartilhamento de tela entre amigos, uma de cada vez. Li
 
 ```
 Cliente Web (navegador)
-    ↓ wss://share.seudominio.com.br/rtc (proxy nginx)
+    ↓ wss://share.seudominio.com.br (bare origin, cliente anexa /rtc)
 Nginx (443 SSL)
-    ↓ ws://127.0.0.1:7880 (upgrade WebSocket)
+    ↓ location /rtc → ws://127.0.0.1:7880 (upgrade WebSocket)
 LiveKit SFU (7880 signalling)
     ↓ UDP 50000–50100 (media)
 Internet pública
@@ -191,7 +191,11 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### Configuração do nginx
 
-O nginx deve servir o front-end estático em `root /caminho/para/cheri-share/web/dist;` e fazer proxy para o token-service e LiveKit:
+O nginx deve servir o front-end estático em `root /caminho/para/cheri-share/web/dist;` e fazer proxy para o token-service e LiveKit.
+
+**Importante:** O navegador conecta em `wss://PUBLIC_HOST` (sem `/rtc`). O `livekit-client` acrescenta automaticamente o caminho `/rtc` na requisição; o bloco `location /rtc` do nginx intercepta isso e encaminha para `ws://127.0.0.1:7880`.
+
+Configuração:
 
 - Substitua `/caminho/para/cheri-share/web/dist` pelo caminho real do repositório
 - Configure `ssl_certificate` e `ssl_certificate_key` com seus certificados Certbot
