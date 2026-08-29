@@ -17,5 +17,16 @@ describe('lerConfig', () => {
     expect(c.porta).toBe(3000);
     expect(c.livekitUrl).toBe('http://127.0.0.1:7880');
     expect(c.publicHost).toBe('share.exemplo.com');
+    expect(c.urlConsumo).toBe('http://127.0.0.1:6789/metrics');
+  });
+
+  it('deixa a URL de métricas ser trocada por USAGE_URL', () => {
+    const c = lerConfig({
+      LIVEKIT_API_KEY: 'k',
+      LIVEKIT_API_SECRET: 's',
+      PUBLIC_HOST: 'share.exemplo.com',
+      USAGE_URL: 'http://metrics.interno:9100/metrics',
+    });
+    expect(c.urlConsumo).toBe('http://metrics.interno:9100/metrics');
   });
 });

@@ -5,6 +5,7 @@ export type Config = {
   publicHost: string;
   porta: number;
   metricaConsumo: string;
+  urlConsumo: string;
   arquivoConsumo: string;
 };
 
@@ -22,6 +23,7 @@ export function lerConfig(env: NodeJS.ProcessEnv): Config {
     publicHost: obrigatorio(env, 'PUBLIC_HOST'),
     porta: Number(env.PORT ?? 3000),
     metricaConsumo: env.USAGE_METRIC ?? 'livekit_node_bytes_out',
+    urlConsumo: env.USAGE_URL ?? 'http://127.0.0.1:6789/metrics',
     arquivoConsumo: env.USAGE_FILE ?? '/dados/consumo.json',
   };
 }

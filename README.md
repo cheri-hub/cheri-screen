@@ -89,21 +89,33 @@ Se ver erro de configuração YAML, verifique `livekit/livekit.yaml`.
 
 ### 3. Abrir o firewall
 
-Na VPS, configure UFW para aceitar tráfego:
+**Todo o desenho de portas assume firewall em `default deny incoming`.** Com
+`network_mode: host`, o LiveKit liga `7880` (HTTP/WS) e `6789` (métricas
+Prometheus) em `0.0.0.0`; sem default-deny, o endpoint de métricas (contagem de
+salas/participantes, banda) e a porta de sinalização ficam servidos para a
+internet. Numa VPS com ufw inativo — padrão comum — isso fica exposto.
+
+Na VPS, configure UFW do zero:
 
 ```bash
-sudo ufw allow 7881/tcp
-sudo ufw allow 50000:50100/udp
-sudo ufw reload
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow OpenSSH            # ou: sudo ufw allow 22/tcp
+sudo ufw allow 443/tcp           # nginx
+sudo ufw allow 7881/tcp          # contingência TCP de mídia
+sudo ufw allow 50000:50100/udp   # mídia em tempo real
+sudo ufw enable
 ```
 
 Confirme:
 
 ```bash
-sudo ufw status
+sudo ufw status verbose
 ```
 
-Esperado: regras para `7881/tcp` e `50000:50100/udp`.
+Esperado: `Default: deny (incoming)` e regras só para SSH, `443/tcp`,
+`7881/tcp` e `50000:50100/udp`. `7880` e `6789` **não** aparecem — só o nginx
+(local) e o token-service (local) falam com elas.
 
 ### 4. Configurar nginx
 
@@ -155,9 +167,12 @@ eyJhbGc...Zm9v
 
 2. Repita numa **máquina B** em rede **diferente** (use 4G, outro ISP, ou VPN de localização diferente):
    - Mesmo URL de servidor
-   - **Token diferente** (rode `docker run ... generate-keys` e `token create` de novo)
+   - **Token diferente**: rode `livekit-cli token create` de novo com **as mesmas
+     chaves** (`--api-key` / `--api-secret` idênticos aos do `.env`) e só troque
+     `--identity`. Gerar chaves novas com `generate-keys` produziria um par que o
+     SFU não reconhece.
    - Mesmo name de sala (`teste`)
-   - Identidade diferente (ex: `tu` em vez de `eu`)
+   - Identidade diferente (ex: `--identity tu` em vez de `eu`)
    - Clique "Join"
 
 3. Confirme:
@@ -193,7 +208,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 O nginx deve servir o front-end estático em `root /caminho/para/cheri-share/web/dist;` e fazer proxy para o token-service e LiveKit.
 
-**Importante:** O navegador conecta em `wss://PUBLIC_HOST` (sem `/rtc`). O `livekit-client` acrescenta automaticamente o caminho `/rtc` na requisição; o bloco `location /rtc` do nginx intercepta isso e encaminha para `ws://127.0.0.1:7880`.
+**Importante:** O navegador conecta em `wss://PUBLIC_HOST` (sem `/rtc`). O `livekit-client` tenta `/rtc/v1` e cai para `/rtc` num 404; o bloco do nginx precisa ser `location /rtc` (**prefixo**, pega `/rtc` e `/rtc/v1`) e encaminhar para `ws://127.0.0.1:7880`. `location = /rtc` (match exato) quebra a conexão.
 
 Configuração:
 
@@ -222,27 +237,42 @@ O arquivo `.env` na raiz do repositório **nunca deve ser commitado**. Na VPS:
 
 Após deploy, é **essencial** validar que o sistema funciona em condições reais de NAT traversal. Testes locais não cobrem isso.
 
-### Step 1: Teste com dois usuários em redes diferentes
+O app tem um só fluxo: **uma tela por vez, com áudio de tela, e pedido de
+takeover**. Não há câmera, microfone nem chat (spec §1). O roteiro de verificação
+segue esse fluxo.
 
-Com duas pessoas em redes **diferentes** (uma em 4G/5G, outra em WiFi de ISP diferente ou VPN):
+### Step 1: Fluxo completo com dois usuários em redes diferentes
 
-1. Usuário A entra na sala e ativa câmera/áudio
-2. Usuário B entra na mesma sala
-3. Confirme:
-   - [ ] Vídeo de A aparece em B
-   - [ ] Vídeo de B aparece em A
-   - [ ] Áudio bidirecional fluindo
-   - [ ] Compartilhamento de tela funciona
-   - [ ] Permissões (pedir fala, ceder) funcionam
+Precisa de **Chrome ou Edge** nas duas pontas (só eles capturam áudio de tela) e
+de duas redes **diferentes** (uma em 4G/5G, a outra em WiFi de outro ISP ou VPN).
+
+1. Na home, usuário A clica em **Criar sala** e copia o link.
+2. A entra na sala (informa o apelido na primeira vez).
+3. B abre o mesmo link em outra rede e entra com outro apelido.
+4. A clica em **Compartilhar minha tela**, escolhe o perfil (**Tela** ou
+   **Vídeo**), marca a caixa de áudio de tela no seletor do navegador e confirma.
+5. Confirme:
+   - [ ] B vê a tela de A (o texto "Ninguém está compartilhando agora" some)
+   - [ ] O áudio da tela de A chega em B
+   - [ ] A lista de participantes mostra os dois apelidos nas duas pontas
+6. B clica em **Compartilhar minha tela** → A vê "B quer compartilhar a tela.".
+7. A clica em **Ceder**. Confirme:
+   - [ ] A publicação troca de dono: B passa a ver "Parar de compartilhar",
+         A volta a ver o seletor de perfil
+   - [ ] B agora enxerga a própria tela publicada e A vê a tela de B
+8. Repita o passo 6 e, desta vez, **A não responde**. Após ~30s:
+   - [ ] A vez passa sozinha para B ("silêncio cede a vez", spec §6.2)
+   - [ ] B começa a transmitir sem clique extra
 
 **Se falhar:**
 - Verifique `docker compose logs livekit` na VPS
-- Confirme firewall: `sudo ufw status` mostra `50000:50100/udp open` e `7881/tcp open`
+- Confirme firewall: `sudo ufw status verbose` mostra `50000:50100/udp` e
+  `7881/tcp` liberados e `Default: deny (incoming)`
 - Teste TCP fallback: `nc -zv share.seudominio.com.br 7881`
 
 ### Step 2: Teste contingência TCP (fallback UDP)
 
-Bloqueie temporariamente UDP para confirmar que média cai para TCP:
+Bloqueie temporariamente UDP para confirmar que a mídia cai para TCP:
 
 ```bash
 # Na VPS
@@ -251,8 +281,8 @@ sudo ufw reload
 ```
 
 Recarregue o navegador, tente reconectar e confirme:
-- [ ] Vídeo ainda passa (via TCP fallback na porta 7881)
-- [ ] Áudio ainda funciona (pode estar um pouco mais latent)
+- [ ] A tela compartilhada ainda passa (via fallback TCP na porta 7881)
+- [ ] O áudio de tela ainda funciona (a latência pode subir um pouco)
 
 Reabra UDP:
 
@@ -273,7 +303,29 @@ LiveKit expõe Prometheus em `http://127.0.0.1:6789/metrics`. Use para monitorar
 
 ## Desenvolvimento local
 
-(Futuro: como rodar web/ e token-service/ em localhost com LiveKit)
+Precisa de um LiveKit acessível em `ws://127.0.0.1:7880`. O mais rápido:
+
+```bash
+docker compose up -d livekit   # usa as chaves do seu .env
+```
+
+Em dois terminais, com o `.env` da raiz preenchido:
+
+```bash
+# terminal 1 — token-service (porta 3000)
+cd token-service && npm install && npm run dev
+
+# terminal 2 — front (porta 5173)
+cd web && npm install && npm run dev
+```
+
+O `vite.config.ts` já faz proxy de `/api` para `http://127.0.0.1:3000`, então
+abra `http://localhost:5173` e o fluxo de criar/entrar na sala funciona ponta a
+ponta. Captura de tela exige contexto seguro: `localhost` conta como seguro nos
+navegadores baseados em Chromium.
+
+Testes: `npm test` em cada pacote. E2E (exige a pilha completa no ar):
+`cd web && npm run e2e`.
 
 ## Licença
 

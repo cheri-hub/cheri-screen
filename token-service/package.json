@@ -1,17 +1,15 @@
 {
   "name": "token-service",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Serviço Fastify que assina os JWTs de entrada do LiveKit e arbitra a vez de compartilhar tela do cheri-share.",
+  "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "module",
   "dependencies": {
     "fastify": "^5.12.1",

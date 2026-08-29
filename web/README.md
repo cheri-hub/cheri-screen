@@ -1,32 +1,15 @@
-# React + TypeScript + Vite
+# web — front do cheri-share
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+SPA em React + Vite + TypeScript + Tailwind. Serve a home (criar/entrar em sala)
+e a sala em si: player da tela transmitida, lista de participantes, seletor de
+perfil de captura, disputa da vez (pedir / ceder / silêncio cede em 30s) e o
+medidor de consumo no rodapé. Conversa com o `token-service` via `/api` (proxy
+do Vite em dev, nginx em produção) e com o SFU LiveKit via `livekit-client`.
 
-Currently, two official plugins are available:
+- `npm run dev` — dev server na 5173 (proxy `/api` → `127.0.0.1:3000`)
+- `npm test` — Vitest
+- `npm run build` — checagem de tipos + build estático em `dist/`
+- `npm run e2e` — Playwright (exige a pilha completa no ar)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Detalhes de arquitetura e deploy: `../README.md` e
+`../docs/superpowers/specs/2026-08-28-cheri-share-design.md`.

@@ -15,7 +15,7 @@ export async function iniciarColeta(
 
   return setInterval(async () => {
     try {
-      const texto = await buscarMetricas('http://127.0.0.1:6789/metrics');
+      const texto = await buscarMetricas(config.urlConsumo);
       const bytes = lerMetrica(texto, config.metricaConsumo);
       if (bytes === null) {
         log(`métrica ${config.metricaConsumo} não encontrada`);
