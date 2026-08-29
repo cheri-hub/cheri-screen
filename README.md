@@ -148,7 +148,7 @@ eyJhbGc...Zm9v
 
 1. Abra navegador Firefox ou Chrome em **máquina A** (rede A):
    - Acesse https://meet.livekit.io/?tab=custom
-   - Em "Server URL": `wss://share.seudominio.com.br/rtc`
+   - Em "Server URL": `wss://share.seudominio.com.br` (o cliente LiveKit anexa `/rtc` sozinho)
    - Em "Token": cole o token gerado acima
    - Clique "Join"
    - Ative câmera: esperado vídeo local no painel esquerdo

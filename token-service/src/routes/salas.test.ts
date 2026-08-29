@@ -54,12 +54,15 @@ describe('rotas de sala', () => {
     });
 
     expect(r.statusCode).toBe(200);
-    const { token } = r.json();
+    const { token, wsUrl } = r.json();
     const grant = JSON.parse(
       Buffer.from(token.split('.')[1], 'base64').toString(),
     );
     expect(grant.video.canPublish).toBe(false);
     expect(grant.video.canSubscribe).toBe(true);
     expect(grant.video.room).toBe(sala);
+    // livekit-client anexa o próprio segmento /rtc ao conectar; o token
+    // devolve só a origem para não gerar wss://host/rtc/rtc/...
+    expect(wsUrl).toBe('wss://test.local');
   });
 });

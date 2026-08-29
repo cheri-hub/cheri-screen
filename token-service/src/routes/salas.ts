@@ -50,6 +50,6 @@ export function registrarRotasDeSala(app: FastifyInstance): void {
       canPublishData: true,
     });
 
-    return { token: await at.toJwt(), wsUrl: `wss://${config.publicHost}/rtc` };
+    return { token: await at.toJwt(), wsUrl: `wss://${config.publicHost}` };
   });
 }

@@ -3,8 +3,12 @@ export type TokenResposta = { token: string; wsUrl: string }
 async function post<T>(caminho: string, corpo?: unknown): Promise<T> {
   const r = await fetch(`/api${caminho}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: corpo ? JSON.stringify(corpo) : undefined,
+    ...(corpo === undefined
+      ? {}
+      : {
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(corpo),
+        }),
   })
   if (!r.ok) throw Object.assign(new Error('falha'), { status: r.status })
   return r.json() as Promise<T>
