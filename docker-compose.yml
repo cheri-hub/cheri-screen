@@ -1,0 +1,36 @@
+services:
+  livekit:
+    image: livekit/livekit-server:v1.8
+    restart: unless-stopped
+    network_mode: host
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7880"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  token-service:
+    build: ./token-service
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - dados:/dados
+    depends_on:
+      - livekit
+
+  web-build:
+    image: node:22-alpine
+    working_dir: /app
+    profiles: ["build"]
+    volumes:
+      - ./web:/app
+    command: sh -c "npm ci && npm run build"
+
+volumes:
+  dados:

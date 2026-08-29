@@ -141,6 +141,8 @@ O token de entrada nasce com `canPublish: false` para todos. Ao conceder a vez, 
 | Alguém entra no meio | Já vê a transmissão em andamento |
 | Resposta vinda de quem não tem a vez | 403 |
 
+**Limitação conhecida — identidade não autenticada.** As rotas `/floor/*` confiam no `identity` enviado no corpo, sem prova. Como esse `identity` é público (vai na metadata da sala), qualquer participante pode chamar `/floor/answer` ou `/floor/release` se passando pelo dono atual — auto-concessão instantânea, driblando a espera de 30s e o 403. **Isso não fura o invariante de publicação:** ainda é preciso a concessão do servidor e continua havendo um só publicador (seção 6.3, aplicado pelo SFU). É um buraco de justiça/griefing entre pessoas já dentro da sala, não de segurança de publicação. A regra dos 403 é best-effort, não garantida. Fechar isso é o ponto de extensão de autenticação da seção 12 (amarrar `identity` ao JWT); fora do escopo inicial por decisão explícita de "sem autenticação" (seção 2).
+
 ## 7. Erros visíveis ao usuário
 
 Em português, sem jargão, cada um com tratamento próprio:
@@ -166,7 +168,9 @@ Esta seção existe porque a franquia mensal da VPS é a restrição dimensionan
 
 O `contentHint` não é detalhe cosmético: ele diz ao encoder se deve preservar nitidez de texto ou fluidez de movimento. Errado, produz texto borrado ou vídeo aos trancos.
 
-**1080p fica disponível num botão** para quando a nitidez importar de verdade, ao custo de dobrar o consumo. Todos os valores são configuráveis por variável de ambiente.
+**1080p fica disponível num botão** para quando a nitidez importar de verdade, ao custo de dobrar o consumo.
+
+**Nota de implementação:** os valores dos perfis (resolução, FPS, `contentHint`, bitrate alvo), o teto de 1080p e o codec padrão VP9 estão **fixos em código** (`web/src/lib/perfis.ts`), não em variável de ambiente. São decisões de dimensionamento de consumo — mudá-las exige revalidar as estimativas da seção 8.3 de qualquer forma, então versioná-las junto do código é mais honesto que um `.env` que ninguém revisa. A única variável de consumo do serviço é `USAGE_URL` (endpoint Prometheus lido pelo coletor).
 
 ### 8.2 Codec
 
@@ -226,7 +230,7 @@ Um `server` novo para o subdomínio: `/` serve os estáticos, `/api/` faz proxy 
 
 O contador de consumo vive num **volume Docker nomeado** montado no token-service — é o único dado que sobrevive a um `docker compose down`. Perdê-lo custa apenas o histórico do mês corrente.
 
-Variáveis de ambiente que controlam qualidade e consumo: resolução e FPS de cada perfil, bitrate alvo, codec padrão (`vp9` | `av1`) e o teto opcional de 1080p.
+Qualidade e consumo (resolução, FPS, bitrate alvo de cada perfil, codec padrão VP9, teto de 1080p) são **constantes de código** em `web/src/lib/perfis.ts` — ver nota de implementação na seção 8.1. As variáveis de ambiente do token-service que tocam consumo são `USAGE_METRIC`, `USAGE_URL` e `USAGE_FILE`.
 
 ## 10. Testes
 
