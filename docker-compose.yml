@@ -24,5 +24,13 @@ services:
     depends_on:
       - livekit
 
+  web-build:
+    image: node:22-alpine
+    working_dir: /app
+    profiles: ["build"]
+    volumes:
+      - ./web:/app
+    command: sh -c "npm ci && npm run build"
+
 volumes:
   dados:

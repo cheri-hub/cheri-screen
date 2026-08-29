@@ -14,7 +14,7 @@ LiveKit SFU (7880 signalling)
 Internet pública
 ```
 
-## Puertos
+## Portas
 
 - **7880/TCP** localhost: signalling WebSocket do LiveKit
 - **7881/TCP** público: fallback TCP para mídia
@@ -173,6 +173,91 @@ eyJhbGc...Zm9v
 - Confirme nginx: `sudo nginx -t` e `sudo systemctl status nginx`
 
 **Este é o portão da fase 1.** Se mídia não fluir, não prossiga com as próximas tarefas.
+
+## Deploy em produção
+
+Pré-requisito: `.env` configurado e chaves de API do LiveKit definidas (ver seção "Ciclo de vida do SFU" acima).
+
+### Construir o front e deploy
+
+Na VPS, execute:
+
+```bash
+git pull
+docker compose run --rm web-build
+docker compose up -d --build
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Configuração do nginx
+
+O nginx deve servir o front-end estático em `root /caminho/para/cheri-share/web/dist;` e fazer proxy para o token-service e LiveKit:
+
+- Substitua `/caminho/para/cheri-share/web/dist` pelo caminho real do repositório
+- Configure `ssl_certificate` e `ssl_certificate_key` com seus certificados Certbot
+
+Exemplo:
+
+```bash
+sudo cp nginx/cheri-share.conf.example /etc/nginx/sites-available/cheri-share
+sudo sed -i 's|/caminho/para/cheri-share|/home/app/cheri-share|g' /etc/nginx/sites-available/cheri-share
+sudo ln -s /etc/nginx/sites-available/cheri-share /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Variáveis de ambiente
+
+O arquivo `.env` na raiz do repositório **nunca deve ser commitado**. Na VPS:
+
+1. Copie `.env.example` para `.env`
+2. Preencha as chaves de API e URL pública
+3. Verifique `.gitignore` contém `.env`
+
+## Verificação em produção
+
+Após deploy, é **essencial** validar que o sistema funciona em condições reais de NAT traversal. Testes locais não cobrem isso.
+
+### Step 1: Teste com dois usuários em redes diferentes
+
+Com duas pessoas em redes **diferentes** (uma em 4G/5G, outra em WiFi de ISP diferente ou VPN):
+
+1. Usuário A entra na sala e ativa câmera/áudio
+2. Usuário B entra na mesma sala
+3. Confirme:
+   - [ ] Vídeo de A aparece em B
+   - [ ] Vídeo de B aparece em A
+   - [ ] Áudio bidirecional fluindo
+   - [ ] Compartilhamento de tela funciona
+   - [ ] Permissões (pedir fala, ceder) funcionam
+
+**Se falhar:**
+- Verifique `docker compose logs livekit` na VPS
+- Confirme firewall: `sudo ufw status` mostra `50000:50100/udp open` e `7881/tcp open`
+- Teste TCP fallback: `nc -zv share.seudominio.com.br 7881`
+
+### Step 2: Teste contingência TCP (fallback UDP)
+
+Bloqueie temporariamente UDP para confirmar que média cai para TCP:
+
+```bash
+# Na VPS
+sudo ufw deny 50000:50100/udp
+sudo ufw reload
+```
+
+Recarregue o navegador, tente reconectar e confirme:
+- [ ] Vídeo ainda passa (via TCP fallback na porta 7881)
+- [ ] Áudio ainda funciona (pode estar um pouco mais latent)
+
+Reabra UDP:
+
+```bash
+sudo ufw allow 50000:50100/udp
+sudo ufw reload
+```
+
+**Nota:** Este teste prova que o sistema é resiliente a problemas de conectividade UDP e não depende exclusivamente de UDP para funcionar.
 
 ## Métricas
 
