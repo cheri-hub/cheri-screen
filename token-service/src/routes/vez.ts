@@ -15,29 +15,33 @@ export function registrarRotasDaVez(app: FastifyInstance): void {
     return { decisao };
   }
 
-  app.post<{ Params: Params; Body: { identity: string; nome: string } }>(
+  const incompleto = (reply: FastifyReply) =>
+    reply.code(400).send({ erro: 'dados-incompletos' });
+
+  app.post<{ Params: Params; Body: { identity?: string; nome?: string } }>(
     '/rooms/:id/floor/request',
-    (req, reply) =>
-      resolver(
-        req.params.id,
-        { tipo: 'pedir', identity: req.body.identity, nome: req.body.nome },
-        reply,
-      ),
+    (req, reply) => {
+      const { identity, nome } = req.body ?? {};
+      if (!identity || !nome) return incompleto(reply);
+      return resolver(req.params.id, { tipo: 'pedir', identity, nome }, reply);
+    },
   );
 
-  app.post<{ Params: Params; Body: { identity: string; aceita: boolean } }>(
+  app.post<{ Params: Params; Body: { identity?: string; aceita?: boolean } }>(
     '/rooms/:id/floor/answer',
-    (req, reply) =>
-      resolver(
-        req.params.id,
-        { tipo: 'responder', identity: req.body.identity, aceita: req.body.aceita },
-        reply,
-      ),
+    (req, reply) => {
+      const { identity, aceita } = req.body ?? {};
+      if (!identity || typeof aceita !== 'boolean') return incompleto(reply);
+      return resolver(req.params.id, { tipo: 'responder', identity, aceita }, reply);
+    },
   );
 
-  app.post<{ Params: Params; Body: { identity: string } }>(
+  app.post<{ Params: Params; Body: { identity?: string } }>(
     '/rooms/:id/floor/release',
-    (req, reply) =>
-      resolver(req.params.id, { tipo: 'liberar', identity: req.body.identity }, reply),
+    (req, reply) => {
+      const { identity } = req.body ?? {};
+      if (!identity) return incompleto(reply);
+      return resolver(req.params.id, { tipo: 'liberar', identity }, reply);
+    },
   );
 }

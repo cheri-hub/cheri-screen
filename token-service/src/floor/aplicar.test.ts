@@ -9,6 +9,9 @@ const mockRoom = {
 vi.mock('../livekit.js', () => ({ api: { room: mockRoom } }));
 
 const { aplicar } = await import('./aplicar.js');
+// Import hoisted ao escopo do módulo: `await import` dentro do corpo do teste
+// faz a primeira execução (cache frio) estourar o testTimeout padrão de 5s.
+const { criarApp } = await import('../app.js');
 
 const SALA = 'sala-1';
 
@@ -87,7 +90,6 @@ describe('aplicar', () => {
       { identity: 'ana' }, { identity: 'pedro' },
     ]);
 
-    const { criarApp } = await import('../app.js');
     const app = criarApp();
     const r = await app.inject({
       method: 'POST',

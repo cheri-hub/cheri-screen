@@ -28,6 +28,19 @@ describe('rotas de sala', () => {
     );
   });
 
+  it('responde 400 quando falta identity ou apelido no corpo', async () => {
+    const app = criarApp();
+
+    const r = await app.inject({
+      method: 'POST',
+      url: '/rooms/00000000-0000-4000-8000-000000000000/token',
+      payload: { identity: 'i1' },
+    });
+
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ erro: 'dados-incompletos' });
+  });
+
   it('responde 404 quando a sala não existe', async () => {
     mockRoom.listRooms.mockResolvedValue([]);
     const app = criarApp();
