@@ -8,6 +8,8 @@ services:
       - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # Opcional: fixa o IP anunciado nos candidatos ICE. Vazio = LiveKit detecta sozinho.
+      NODE_IP: "${NODE_IP:-}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7880"]
       interval: 30s
