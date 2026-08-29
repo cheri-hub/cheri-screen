@@ -1,10 +1,27 @@
+# Dependências
 node_modules/
+
+# Builds (qualquer dist/ aninhado: web/, token-service/)
 dist/
+dist-ssr/
+
+# Segredos e config preenchida da VPS
+# (os modelos versionados são .env.example e nginx/cheri-share.conf.example)
 .env
+.env.*
+!.env.example
+/nginx/cheri-share.conf
+
+# Dados de runtime (volume do coletor de consumo)
+dados/
+
+# Logs
 *.log
 
-# Config preenchida específica da VPS (o modelo versionado é nginx/cheri-share.conf.example)
-/nginx/cheri-share.conf
-web/dist/
-token-service/dist/
-dados/
+# Ferramentas locais / efêmeras
+.claude/
+.superpowers/
+
+# SO / editores
+.DS_Store
+*.local
