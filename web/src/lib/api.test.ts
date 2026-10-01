@@ -21,18 +21,18 @@ afterEach(() => {
 })
 
 describe('post via criarSala', () => {
-  it('faz POST em /api/rooms sem content-type e sem body', async () => {
-    fetchMock.mockResolvedValue(respostaOk({ id: 'sala-1' }))
+  it('faz POST em /api/rooms com o nome escolhido no body', async () => {
+    fetchMock.mockResolvedValue(respostaOk({ id: 'festa-de-sexta' }))
 
-    const id = await criarSala()
+    const id = await criarSala('Festa de Sexta')
 
-    expect(id).toBe('sala-1')
+    expect(id).toBe('festa-de-sexta')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/rooms')
     expect(init.method).toBe('POST')
-    expect(init.body).toBeUndefined()
-    expect(init.headers).toBeUndefined()
+    expect(init.headers).toEqual({ 'content-type': 'application/json' })
+    expect(JSON.parse(init.body)).toEqual({ nome: 'Festa de Sexta' })
   })
 })
 
@@ -66,6 +66,6 @@ describe('erro HTTP', () => {
   it('lança com status quando a resposta não é ok', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 400 } as Response)
 
-    await expect(criarSala()).rejects.toMatchObject({ status: 400 })
+    await expect(criarSala('festa')).rejects.toMatchObject({ status: 400 })
   })
 })

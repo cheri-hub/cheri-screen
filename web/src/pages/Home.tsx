@@ -1,17 +1,24 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { criarSala } from '../lib/api'
+import { TAMANHO_MIN, slugify } from '../lib/slugify'
 
 export function Home() {
+  const [nome, setNome] = useState('')
   const [criando, setCriando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const navegar = useNavigate()
 
-  async function aoCriar() {
+  const slug = slugify(nome)
+  const nomeValido = slug.length >= TAMANHO_MIN
+
+  async function aoCriar(e: FormEvent) {
+    e.preventDefault()
+    if (!nomeValido || criando) return
     setCriando(true)
     setErro(null)
     try {
-      navegar(`/sala/${await criarSala()}`)
+      navegar(`/sala/${await criarSala(nome)}`)
     } catch {
       setErro('Não deu pra abrir a sala. Tenta de novo em instantes.')
       setCriando(false)
@@ -40,22 +47,43 @@ export function Home() {
           assim, cheri.
         </p>
 
-        <div className="mt-9">
+        <form onSubmit={aoCriar} className="mt-9 max-w-md">
+          <label htmlFor="nome-sala" className="hud-label mb-2 block text-p1">
+            nome da sala
+          </label>
+          <input
+            id="nome-sala"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            maxLength={48}
+            placeholder="Nome da sala"
+            className="chanfro w-full border border-line bg-panel-hi px-3 py-2 text-ink placeholder:text-ink-dim/60 focus:border-p1"
+          />
+          <p className="mt-2 font-mono text-xs text-ink-dim">
+            {slug ? (
+              <>
+                vai ficar: <span className="text-p2">/sala/{slug}</span>
+              </>
+            ) : (
+              'pelo menos 3 letras ou números viram o link da sala'
+            )}
+          </p>
+
           <button
-            onClick={aoCriar}
-            disabled={criando}
-            className="btn-cheri px-8 py-4 text-base"
+            type="submit"
+            disabled={!nomeValido || criando}
+            className="btn-cheri mt-4 px-8 py-4 text-base"
           >
             {criando ? 'Abrindo…' : 'Criar sala'}
           </button>
-        </div>
+        </form>
 
         {erro && (
           <p className="mt-4 font-mono text-sm text-danger">{erro}</p>
         )}
 
         <p className="hud-label mt-12 !tracking-[0.14em]">
-          sem conta · link é a chave · some sozinha quando esvazia
+          sem conta · o nome da sala é o link · some sozinha quando esvazia
         </p>
       </div>
     </main>

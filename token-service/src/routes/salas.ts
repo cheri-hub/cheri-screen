@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { AccessToken } from 'livekit-server-sdk';
 import { api } from '../livekit.js';
 import { config } from '../config.js';
+import { TAMANHO_MIN, slugify } from '../lib/slugify.js';
 
 const EMPTY_TIMEOUT = 300;
 const MAX_PARTICIPANTES = 10;
@@ -13,13 +13,23 @@ export async function salaExiste(id: string): Promise<boolean> {
 }
 
 export function registrarRotasDeSala(app: FastifyInstance): void {
-  app.post('/rooms', async () => {
-    const id = randomUUID();
-    await api.room.createRoom({
-      name: id,
-      emptyTimeout: EMPTY_TIMEOUT,
-      maxParticipants: MAX_PARTICIPANTES,
-    });
+  app.post<{ Body: { nome?: string } }>('/rooms', async (req, reply) => {
+    const bruto = typeof req.body?.nome === 'string' ? req.body.nome : '';
+    const id = slugify(bruto);
+    if (id.length < TAMANHO_MIN) {
+      return reply.code(400).send({ erro: 'nome-invalido' });
+    }
+    try {
+      await api.room.createRoom({
+        name: id,
+        emptyTimeout: EMPTY_TIMEOUT,
+        maxParticipants: MAX_PARTICIPANTES,
+      });
+    } catch (erro) {
+      // LiveKit cria-ou-devolve ao repetir um nome, mas se algum dia isso
+      // mudar, só engolimos o erro quando a sala já existe de fato.
+      if (!(await salaExiste(id))) throw erro;
+    }
     return { id };
   });
 

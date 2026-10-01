@@ -4,6 +4,7 @@ node_modules/
 # Builds (qualquer dist/ aninhado: web/, token-service/)
 dist/
 dist-ssr/
+*.tsbuildinfo
 
 # Segredos e config preenchida da VPS
 # (os modelos versionados são .env.example e nginx/cheri-share.conf.example)

@@ -1,21 +1,17 @@
 export type TokenResposta = { token: string; wsUrl: string }
 
-async function post<T>(caminho: string, corpo?: unknown): Promise<T> {
+async function post<T>(caminho: string, corpo: unknown): Promise<T> {
   const r = await fetch(`/api${caminho}`, {
     method: 'POST',
-    ...(corpo === undefined
-      ? {}
-      : {
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(corpo),
-        }),
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(corpo),
   })
   if (!r.ok) throw Object.assign(new Error('falha'), { status: r.status })
   return r.json() as Promise<T>
 }
 
-export const criarSala = () =>
-  post<{ id: string }>('/rooms').then((r) => r.id)
+export const criarSala = (nome: string) =>
+  post<{ id: string }>('/rooms', { nome }).then((r) => r.id)
 
 export const pedirToken = (sala: string, identity: string, apelido: string) =>
   post<TokenResposta>(`/rooms/${sala}/token`, { identity, apelido })

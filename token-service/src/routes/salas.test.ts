@@ -14,18 +14,51 @@ describe('rotas de sala', () => {
     mockRoom.listRooms.mockReset();
   });
 
-  it('cria a sala com empty_timeout de 300s e devolve o id', async () => {
+  it('cria a sala com empty_timeout de 300s e devolve o nome em slug como id', async () => {
     mockRoom.createRoom.mockResolvedValue({});
     const app = criarApp();
 
-    const r = await app.inject({ method: 'POST', url: '/rooms' });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: { nome: 'Festa de Sexta!' },
+    });
 
     expect(r.statusCode).toBe(200);
     const { id } = r.json();
-    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(id).toBe('festa-de-sexta');
     expect(mockRoom.createRoom).toHaveBeenCalledWith(
       expect.objectContaining({ name: id, emptyTimeout: 300, maxParticipants: 10 }),
     );
+  });
+
+  it('responde 400 quando o nome vira um slug curto demais', async () => {
+    const app = criarApp();
+
+    const r = await app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: { nome: '##' },
+    });
+
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ erro: 'nome-invalido' });
+    expect(mockRoom.createRoom).not.toHaveBeenCalled();
+  });
+
+  it('entra na sala existente em vez de falhar quando o nome já está em uso', async () => {
+    mockRoom.createRoom.mockRejectedValue(new Error('já existe'));
+    mockRoom.listRooms.mockResolvedValue([{ name: 'festa' }]);
+    const app = criarApp();
+
+    const r = await app.inject({
+      method: 'POST',
+      url: '/rooms',
+      payload: { nome: 'Festa' },
+    });
+
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ id: 'festa' });
   });
 
   it('responde 400 quando falta identity ou apelido no corpo', async () => {
